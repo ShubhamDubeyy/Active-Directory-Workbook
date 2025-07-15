@@ -1,4 +1,5 @@
 
+
 # 🧠 Active Directory Pentesting Workbook
 
 ---
@@ -190,7 +191,7 @@ Active Directory (AD) is Microsoft’s directory service—a centralized databas
 - **Module 3**: Reviewing Domain Password Policies & Attack Opportunities  
 - **Module 4**: Built-In Groups & Default Security Settings  
 
----
+- - - 
 
 ## <a name="module-2"></a> Module 2: Initial Enumeration & Reconnaissance
 
@@ -206,11 +207,8 @@ _Learn how to gather intel—both anonymously and with low-privilege credentials
     
 -   **Reconnaissance**  
     The process of quietly mapping out the AD environment: discovering domains, OUs, and naming contexts before attempting any deeper attacks.
-    
 
-----------
-
-### Container Names Explained
+#### Container Names Explained
 
 After an anonymous bind, you’ll often see three top-level containers:
 
@@ -226,8 +224,6 @@ After an anonymous bind, you’ll often see three top-level containers:
     
     -   This is the container holding all actual user, computer, and group objects for your domain. The name (lab.local) is your domain’s DNS name and forms the base Distinguished Name (DN) for domain queries.
         
-
-----------
 
 ### Tools & Commands
 
@@ -247,7 +243,6 @@ After an anonymous bind, you’ll often see three top-level containers:
     whoami /groups
     
     ```
-----------
 
 ### Step-by-Step Guide
 
@@ -284,37 +279,17 @@ After an anonymous bind, you’ll often see three top-level containers:
     ```
     
     _Records default domain DN (e.g., `DC=lab,DC=local`)._
-    
+   
 
-----------
-
-### Expected Result
-
-Listings of top-level containers and naming contexts, giving you the base DNs for further queries.
-
-----------
 
 ### Mitigation & Hardening
 
 -   Disable anonymous LDAP binds via Group Policy: **Computer Configuration → Policies → Windows Settings → Security Settings → Local Policies → Security Options → Domain controller: LDAP server signing requirements** → Require signing.
     
 -   Audit and restrict low-privilege account directory read permissions.
-    
+ 
 
-----------
-
-### Next Steps
-
--   **Attack Type:** Enumeration
-    
--   **Attack Path:**
-    
-    1.  Use naming contexts to enumerate OUs and trusts.
-        
-    2.  Move on to **Initial Enumeration of the Domain**.
-        
-
-----------
+- - - 
 ## <a name="module-3"></a> Module 3: LLMNR/NBT-NS Poisoning (Linux & Windows)
 
 _Capture NTLMv2 hashes by spoofing local name-resolution queries._
@@ -343,7 +318,7 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
     An attack where a non-DC node imitates a DC and requests directory replication, extracting the NTDS.dit database including all user hashes.
     
 
-----------
+
 
 ### Tools & Commands
 
@@ -383,7 +358,7 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
     ```
     
 
-----------
+
 
 ### Step-by-Step Guide
 
@@ -450,7 +425,7 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
     ```
     
 
-----------
+
 
 ### Expected Result
 
@@ -480,7 +455,7 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
     ```
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -495,7 +470,7 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
     ```
     
 
-----------
+
 
 ### Next Steps
 
@@ -511,8 +486,8 @@ _Capture NTLMv2 hashes by spoofing local name-resolution queries._
         
     4.  Dump NTDS.dit hashes and forge Golden Tickets for persistence.
         
+- - -
 
-----------
 ## <a name="module-4"></a> Module 4: Enumerating Users, Groups & Privileged Accounts
 
 ### Introduction  
@@ -594,7 +569,7 @@ Learn to list all users, identify privileged users (`adminCount=1`), find AS-REP
 
 ### Decoding userAccountControl  
 | Flag Name                         | Value | Purpose                         |
-|-----------------------------------|-------|---------------------------------|
+|-----|-------|---|
 | NORMAL_ACCOUNT (512)              | 512   | Normal, enabled user            |
 | ACCOUNTDISABLE (2)                | 2     | Account is disabled             |
 | DONT_EXPIRE_PASSWORD (65536)      | 65536 | Password never expires          |
@@ -1073,7 +1048,7 @@ $aclUsers.Access | Where-Object { $_.ActiveDirectoryRights -match "GenericAll" -
 **Expected Output**:  
 ```
 IdentityReference          ActiveDirectoryRights   ObjectType                               InheritanceType
------------------          ---------------------   ----------                               ---------------
+-------          -                                  -----
 CORP\AuditGroup            WriteDacl               bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
 CORP\Domain Admins         GenericAll              bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
 BUILTIN\Administrators     GenericAll              bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
@@ -1110,7 +1085,7 @@ _Use valid credentials to uncover detailed Active Directory information._
     Represents a machine joined to the domain. Knowing OS and name helps identify targets for further attacks.
     
 
-----------
+
 
 ### Tools & Commands
 
@@ -1146,7 +1121,7 @@ _Use valid credentials to uncover detailed Active Directory information._
     
     ```text
     Name            SamAccountName
-    ----            --------------
+    ----            ----
     Lab Admin User  labadmin
     
     ```
@@ -1162,14 +1137,14 @@ _Use valid credentials to uncover detailed Active Directory information._
     
     ```text
     Name        OperatingSystem
-    ----        ---------------
+    ----        -----
     DC1         Windows Server 2019
     WORKSTN1    Windows 10 Pro
     
     ```
     
 
-----------
+
 
 ### Step-by-Step Guide
 
@@ -1204,7 +1179,7 @@ _Use valid credentials to uncover detailed Active Directory information._
     _What to look for:_ Servers vs workstations to prioritize attacks.
     
 
-----------
+
 
 ### Expected Result
 
@@ -1215,7 +1190,7 @@ _Use valid credentials to uncover detailed Active Directory information._
 -   Inventory of computers and their OS versions.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -1224,7 +1199,7 @@ _Use valid credentials to uncover detailed Active Directory information._
 -   **Audit and monitor** credentialed queries, especially group membership and computer enumeration.
     
 
-----------
+
 
 ### Next Steps
 
@@ -1237,7 +1212,7 @@ _Use valid credentials to uncover detailed Active Directory information._
     2.  Move to **Enumerating Security Controls** to check ACLs and GPOs next.
         
 
-----------
+
 
 
 ## <a name="module-8"></a> Module 8: Enumerating Security Controls (GPOs, ACLs, AD CS, AEP)
@@ -1291,7 +1266,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
     -   **LDAPS Sign/Channel Binding**: Ensures LDAP sessions cannot be tampered with.
         
 
-----------
+
 
 ### Tools & Commands
 
@@ -1356,7 +1331,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
     ```
     
 
-----------
+
 
 ### Step-by-Step Guide
 
@@ -1397,7 +1372,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
     _Ensure `SEAL` is present in flags._
     
 
-----------
+
 
 ### Expected Result
 
@@ -1410,7 +1385,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
 -   Confirmation that LDAP signing/channel binding is enforced.
     
 
-----------
+
 
 ### Exploitation When Misconfigured
 
@@ -1444,7 +1419,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
     ```
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -1457,7 +1432,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
 -   Enforce LDAP signing/channel binding via GPO.
     
 
-----------
+
 
 ### Next Steps
 
@@ -1466,7 +1441,7 @@ _Detect and analyze the policies, permissions, and security settings protecting 
 -   Clean up persistent GPO and ACL changes to reduce detection.
     
 
-----------
+
 ## <a name="module-9"></a> Module 9: Password Spraying (Building Target Lists; Linux & Windows)
 
 _Refine user lists and perform password spraying from both Linux and Windows platforms._
@@ -1486,7 +1461,7 @@ _Refine user lists and perform password spraying from both Linux and Windows pla
     Verifying that sprayed passwords worked, using protocols like LDAP bind or SMB authentication.
     
 
-----------
+
 
 ### Tools & Commands
 
@@ -1523,7 +1498,7 @@ _Expected Output Snippet:_
 [*] LAB\asmith:Spring2025! (LDAP)
 ```
 
-----------
+
 
 ### Step-by-Step Guide
 
@@ -1562,7 +1537,7 @@ _Expected Output Snippet:_
     _If you see share listings, the password is valid._
     
 
-----------
+
 
 ### Expected Result
 
@@ -1571,7 +1546,7 @@ _Expected Output Snippet:_
 -   Successful SMB share listings via valid credentials.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -1582,7 +1557,7 @@ _Expected Output Snippet:_
 -   **Monitor for rapid failed logins** and alert on anomalies.
     
 
-----------
+
 
 ### Next Steps
 
@@ -1828,7 +1803,7 @@ _A deep dive into Kerberos-based attacks and ticket abuses._
     A C# tool for Kerberos abuse: ticket requests (AS-REP, S4U), ticket renewal, Silver/Golden ticket forging, and harvesting.
     
 
-----------
+
 
 ### 1. Kerberoasting (Linux & Windows)
 
@@ -1931,7 +1906,7 @@ Attackers skip step 4 and grab the encoded room-key (TGS) in step 3. They then t
     _Success Indicator_: No error; `klist` shows new TGT.
     
 
-----------
+
 
 ### 2. Kerberos Double Hop & Constrained Delegation
 
@@ -1970,7 +1945,7 @@ _Exploit services configured to delegate on behalf of users._
 3.  Access service as Administrator without AD credentials.
     
 
-----------
+
 
 ### 3. AS-REP Roasting & Silver Ticket Attacks
 
@@ -2017,7 +1992,7 @@ _Extract AS-REP hashes and forge service tickets._
 3.  Authenticate to the service using the forged ticket.
     
 
-----------
+
 
 ### Expected Result
 
@@ -2028,7 +2003,7 @@ _Extract AS-REP hashes and forge service tickets._
 -   Forged Silver Tickets in cache enabling service access.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -2041,7 +2016,7 @@ _Extract AS-REP hashes and forge service tickets._
 -   Rotate service and krbtgt passwords regularly.
     
 
-----------
+
 
 ### References
 
@@ -2076,7 +2051,7 @@ _Understand how to abuse AD’s permission model and replication features._
     A stealthy replication attack where you register a rogue domain controller and push changes (e.g., new admin account) back to the real DCs without detection.
     
 
-----------
+
 
 ### ACL Enumeration Techniques
 
@@ -2096,7 +2071,7 @@ _Discover who holds powerful permissions on AD objects._
     
     ```text
     IdentityReference    ActiveDirectoryRights
-    -----------------    ---------------------
+    -------    -
     LAB\\AdminGroup     GenericAll
     LAB\\BackupOps     DS-Replication-Get-Changes
     
@@ -2113,7 +2088,7 @@ _Discover who holds powerful permissions on AD objects._
     _Expected Output Files:_ `acls.json` showing ACEs graph data.
     
 
-----------
+
 
 ### ACL Abuse Tactics
 
@@ -2155,7 +2130,7 @@ _Leverage powerful ACEs to escalate privileges immediately._
     _Effect:_ Prepare for DCSync by granting needed replication rights.
     
 
-----------
+
 
 ### DCSync & DCShadow
 
@@ -2231,7 +2206,7 @@ lsadump::dcshadow /push
     
     _Expected Output:_ Confirmation that rogue DC object registered and changes replicated.
 
-----------
+
 
 ### Using Impackets
 
@@ -2291,7 +2266,7 @@ lsadump::dcshadow /push
     _Verify_: Check Security Event ID 5136 for directory service modifications.
     
 
-----------
+
 
 ### Expected Result
 
@@ -2302,7 +2277,7 @@ lsadump::dcshadow /push
 -   DCShadow registers a rogue DC and writes changes undetected.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -2313,7 +2288,7 @@ lsadump::dcshadow /push
 -   Audit and tighten ACLs on domain root and critical OUs.
     
 
-----------
+
 
 ### Next Steps
 
@@ -2363,7 +2338,7 @@ lsadump::dcshadow /push
     -   Rotate `krbtgt` account password twice, 24 hours apart, to invalidate forged tickets.
         
 
-----------
+
 
 ## <a name="module-13"></a> Module 13: Domain Trust & Forest Attacks
 
@@ -2387,7 +2362,7 @@ _Move laterally across trust boundaries by abusing domain trust relationships._
     A protection that strips unauthorized SIDs from cross-forest tokens; bypassing it enables high-privilege impersonation.
     
 
-----------
+
 
 ### Simplified Real-World Trust Diagram
 
@@ -2437,14 +2412,14 @@ _Identify and understand the trust relationships in your environment._
     
     ```text
     Name        TrustType Direction ForestTransitive
-    ----        --------- --------- ----------------
+    ----        --------- --------- ------
     PARENT      Forest    Outbound True
     CHILD       External  Inbound  False
     
     ```
     
 
-----------
+
 
 ### 2. Child → Parent Trust Abuse (Linux & Windows)
 
@@ -2469,7 +2444,7 @@ _Exploit an outbound child-to-parent trust to authenticate in the parent domain.
     ```
     
 
-----------
+
 
 ### 3. Cross-Forest Trust Abuse (Linux & Windows)
 
@@ -2519,7 +2494,7 @@ _Bypass SID filtering to impersonate high-privilege accounts in another forest._
     _Expected Output:_ Forged ticket injected, access CHLD resources as high-priv user.
     
 
-----------
+
 
 ### Expected Result
 
@@ -2530,7 +2505,7 @@ _Bypass SID filtering to impersonate high-privilege accounts in another forest._
 -   Cross-forest resource access as high-privilege user when SID filtering is disabled.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -2541,14 +2516,14 @@ _Bypass SID filtering to impersonate high-privilege accounts in another forest._
 -   Monitor for unusual logons from trusted domains.
     
 
-----------
+
 
 ### Next Steps
 
 1.  Use compromised parent credentials to enumerate and pivot deeper.
     
 2.  Clean up any forged tickets or SMB sessions to avoid detection.
-----------
+
 
 
 ## <a name="module-14"></a> Module 14: AD Certificate Services Enumeration & Abuses
@@ -2726,7 +2701,7 @@ _Use certificates and keys outside normal user objects for stealth._
     _Expected Output:_ `Certificate issued: user.pfx`
     
 
-----------
+
 
 ### Expected Result
 
@@ -2739,7 +2714,7 @@ _Use certificates and keys outside normal user objects for stealth._
 -   Rogue certificates/keys created for stealth authentication.
     
 
-----------
+
 
 ### Mitigation & Hardening
 
@@ -2752,7 +2727,7 @@ _Use certificates and keys outside normal user objects for stealth._
 -   Restrict autoenroll and enforce approval workflows for certificate templates.
     
 
-----------
+
 
 ### Next Steps
 
